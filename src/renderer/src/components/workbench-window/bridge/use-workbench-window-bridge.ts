@@ -3,8 +3,10 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { WorkbenchSnapshot } from '../../../../../shared/workbench-window/workbench-window-types'
 import type { WorkbenchWindowsApi } from '../../../../../preload/api/workbench-windows-api'
+import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { buildWorkbenchSnapshots } from './build-workbench-snapshot'
 import { handleWorkbenchCommand } from './workbench-command-handler'
+import { watchDetachedTabActivation } from './detached-tab-activation-guard'
 
 // Agent-status bursts would otherwise rebuild every window's snapshot per event.
 const PUBLISH_THROTTLE_MS = 250
@@ -26,7 +28,7 @@ function workbenchInputsChanged(state: AppState, previous: AppState): boolean {
 }
 
 function snapshotKey(snapshot: WorkbenchSnapshot): string {
-  return JSON.stringify(snapshot.tabs)
+  return JSON.stringify([snapshot.tabs, snapshot.pendingTabCount])
 }
 
 /** Publish per-window snapshots and run window commands; keep subscriptions out of the effect body for cleanup clarity. */
@@ -44,7 +46,11 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
     // Windows whose every tab left still need the empty view so they can close.
     for (const windowId of [...lastKeyByWindowId.keys(), ...requested]) {
       if (!snapshotsByWindowId.has(windowId)) {
-        snapshotsByWindowId.set(windowId, { tabs: [], generatedAt: lastPublishAt })
+        snapshotsByWindowId.set(windowId, {
+          tabs: [],
+          pendingTabCount: 0,
+          generatedAt: lastPublishAt
+        })
       }
     }
     for (const [windowId, snapshot] of snapshotsByWindowId) {
@@ -53,7 +59,7 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
         continue
       }
       void api.publishSnapshot(windowId, snapshot)
-      if (snapshot.tabs.length === 0) {
+      if (snapshot.tabs.length === 0 && snapshot.pendingTabCount === 0) {
         lastKeyByWindowId.delete(windowId)
       } else {
         lastKeyByWindowId.set(windowId, key)
@@ -74,6 +80,10 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
   }
 
   const unsubscribeStore = useAppStore.subscribe((state, previous) => {
+    // A workbench window zooms this window's origin too; keep fixed-DIP CSS compensation in step.
+    if (state.uiZoomLevel !== previous.uiZoomLevel) {
+      syncZoomCSSVar()
+    }
     const hasWindows =
       lastKeyByWindowId.size > 0 || Object.keys(state.detachedWindowIdByTabId).length > 0
     if (hasWindows && workbenchInputsChanged(state, previous)) {
@@ -85,6 +95,7 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
     schedule()
   })
   const offCommand = api.onCommand(handleWorkbenchCommand)
+  const offActivationGuard = watchDetachedTabActivation()
   const offClosed = api.onWindowClosed((windowId) => {
     lastKeyByWindowId.delete(windowId)
     useAppStore.getState().foldWorkbenchWindowTabsBack(windowId)
@@ -96,6 +107,7 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
     unsubscribeStore()
     offRequested()
     offCommand()
+    offActivationGuard()
     offClosed()
   }
 }

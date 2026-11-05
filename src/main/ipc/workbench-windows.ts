@@ -15,6 +15,7 @@ import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRendere
 import {
   admitWorkbenchCommand,
   admitWorkbenchEditorContent,
+  admitWorkbenchNotice,
   admitWorkbenchSnapshot,
   admitWorkbenchTabIds
 } from './workbench-window-payload-validation'
@@ -25,6 +26,7 @@ const CHANNELS = [
   'workbench:requestSnapshot',
   'workbench:command',
   'workbench:publishEditorContent',
+  'workbench:publishNotice',
   'workbench:closeAll'
 ] as const
 
@@ -131,6 +133,20 @@ export function registerWorkbenchWindowHandlers(
     )
     if (content) {
       window.webContents.send('workbench:editorContent', content)
+    }
+  })
+
+  ipcMain.handle('workbench:publishNotice', (event, args: unknown): void => {
+    const windowId = windowIdArg(args)
+    const window = windowId ? getWorkbenchWindow(windowId) : null
+    if (!isTrustedUIRenderer(event.sender) || !window) {
+      return
+    }
+    const notice = admitWorkbenchNotice(
+      args && typeof args === 'object' && 'notice' in args ? args.notice : null
+    )
+    if (notice) {
+      window.webContents.send('workbench:notice', notice)
     }
   })
 

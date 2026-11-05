@@ -1,6 +1,7 @@
 import type {
   WorkbenchCommand,
   WorkbenchEditorContent,
+  WorkbenchNotice,
   WorkbenchSnapshot,
   WorkbenchTabView,
   WorkbenchTerminalPane
@@ -107,7 +108,15 @@ export function admitWorkbenchSnapshot(value: unknown): WorkbenchSnapshot | null
   if (value.tabs.length > WORKBENCH_MAX_TABS || !value.tabs.every(isTabView)) {
     return null
   }
-  return { tabs: value.tabs, generatedAt: value.generatedAt }
+  const pendingTabCount = value.pendingTabCount
+  if (
+    typeof pendingTabCount !== 'number' ||
+    !Number.isSafeInteger(pendingTabCount) ||
+    pendingTabCount < 0
+  ) {
+    return null
+  }
+  return { tabs: value.tabs, pendingTabCount, generatedAt: value.generatedAt }
 }
 
 export function admitWorkbenchCommand(value: unknown): WorkbenchCommand | null {
@@ -164,5 +173,11 @@ export function admitWorkbenchTabIds(value: unknown): string[] | null {
   const tabIds = value.tabIds
   return tabIds.length > 0 && tabIds.length <= WORKBENCH_MAX_TABS && tabIds.every(isId)
     ? tabIds
+    : null
+}
+
+export function admitWorkbenchNotice(value: unknown): WorkbenchNotice | null {
+  return isRecord(value) && value.kind === 'error' && isText(value.message) && value.message
+    ? { kind: 'error', message: value.message }
     : null
 }

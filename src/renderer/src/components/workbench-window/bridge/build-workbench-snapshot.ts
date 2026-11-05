@@ -171,7 +171,7 @@ export function buildWorkbenchSnapshots(state: AppState, now: number): Workbench
   for (const [tabId, windowId] of Object.entries(state.detachedWindowIdByTabId)) {
     let snapshot = snapshotsByWindowId.get(windowId)
     if (!snapshot) {
-      snapshot = { tabs: [], generatedAt: now }
+      snapshot = { tabs: [], pendingTabCount: 0, generatedAt: now }
       snapshotsByWindowId.set(windowId, snapshot)
     }
     if (!findUnifiedTab(state, tabId)) {
@@ -180,7 +180,9 @@ export function buildWorkbenchSnapshots(state: AppState, now: number): Workbench
     }
     const view = buildTabView(state, tabId)
     // A tab mid-update (no terminal row yet) stays assigned and reappears on the next build.
-    if (view && snapshot.tabs.length < WORKBENCH_MAX_TABS) {
+    if (!view) {
+      snapshot.pendingTabCount += 1
+    } else if (snapshot.tabs.length < WORKBENCH_MAX_TABS) {
       snapshot.tabs.push(view)
     }
   }

@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import type {
   WorkbenchCommand,
   WorkbenchEditorContent,
+  WorkbenchNotice,
   WorkbenchRelayedCommand,
   WorkbenchSnapshot
 } from '../../shared/workbench-window/workbench-window-types'
@@ -19,6 +20,8 @@ export const workbenchWindowsApi = {
     ipcRenderer.invoke('workbench:publishSnapshot', { windowId, snapshot }),
   publishEditorContent: (windowId: string, content: WorkbenchEditorContent) =>
     ipcRenderer.invoke('workbench:publishEditorContent', { windowId, content }),
+  publishNotice: (windowId: string, notice: WorkbenchNotice) =>
+    ipcRenderer.invoke('workbench:publishNotice', { windowId, notice }),
   closeAll: () => ipcRenderer.invoke('workbench:closeAll'),
   onSnapshotRequested: (callback: (windowId: string) => void) =>
     subscribe<{ windowId: string }>('workbench:snapshotRequested', (payload) =>
@@ -35,5 +38,6 @@ export const workbenchWindowsApi = {
   onSnapshot: (callback: (snapshot: WorkbenchSnapshot) => void) =>
     subscribe('workbench:snapshot', callback),
   onEditorContent: (callback: (content: WorkbenchEditorContent) => void) =>
-    subscribe('workbench:editorContent', callback)
+    subscribe('workbench:editorContent', callback),
+  onNotice: (callback: (notice: WorkbenchNotice) => void) => subscribe('workbench:notice', callback)
 } satisfies WorkbenchWindowsApi

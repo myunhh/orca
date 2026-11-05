@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   Select,
@@ -40,9 +41,9 @@ function WorkbenchSplitPane({
 }): React.JSX.Element {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-2">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2">
         <Select value={tab.tabId} onValueChange={onChoose}>
-          <SelectTrigger size="sm" className="h-6 min-w-0 max-w-64">
+          <SelectTrigger size="sm" density="compact" className="min-w-0 max-w-64">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -75,6 +76,12 @@ export function WorkbenchWindowRoot(): React.JSX.Element {
     model.splitEnabled && activeTab
       ? (tabs.find((tab) => tab.tabId === model.secondaryTabId) ?? null)
       : null
+
+  // The main window runs this window's commands; their failures show here, where the user acted.
+  useEffect(
+    () => window.api.workbenchWindows?.onNotice((notice) => toast.error(notice.message)),
+    []
+  )
 
   const windowTitle = translate('components.workbench.window.WorkbenchWindowRoot.title', 'Orca')
   useEffect(() => {

@@ -43,6 +43,8 @@ export type WorkbenchTabView = {
 /** Published by the main renderer; a workbench window renders exactly these tabs. */
 export type WorkbenchSnapshot = {
   tabs: WorkbenchTabView[]
+  /** Assigned tabs whose view cannot be built yet; the window waits for them instead of closing. */
+  pendingTabCount: number
   generatedAt: number
 }
 
@@ -66,6 +68,9 @@ export type WorkbenchEditorContent =
       mimeType: string | null
     }
   | { requestId: string; tabId: string; status: 'error'; message: string }
+
+/** A command failure shown in the window that sent the command, not the main window behind it. */
+export type WorkbenchNotice = { kind: 'error'; message: string }
 
 export const WORKBENCH_MAX_TABS = 64
 export const WORKBENCH_MAX_PANES_PER_TAB = 32

@@ -86,13 +86,13 @@ export function useWorkbenchWindowModel(): WorkbenchWindowModel {
     void api.requestSnapshot()
     return off
   }, [])
-  const tabCount = state.snapshot?.tabs.length ?? 0
+  const isEmpty = state.snapshot?.tabs.length === 0 && state.snapshot.pendingTabCount === 0
   useEffect(() => {
     // Like a browser window whose last tab moved out.
-    if (state.hadTabs && tabCount === 0) {
+    if (state.hadTabs && isEmpty) {
       window.close()
     }
-  }, [state.hadTabs, tabCount])
+  }, [state.hadTabs, isEmpty])
   const activate = useCallback((tabId: string) => dispatch({ type: 'activate', tabId }), [])
   const setSecondary = useCallback((tabId: string) => dispatch({ type: 'setSecondary', tabId }), [])
   const toggleSplit = useCallback(() => dispatch({ type: 'toggleSplit' }), [])

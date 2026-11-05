@@ -1,6 +1,7 @@
 import type {
   WorkbenchCommand,
   WorkbenchEditorContent,
+  WorkbenchNotice,
   WorkbenchRelayedCommand,
   WorkbenchSnapshot
 } from '../../shared/workbench-window/workbench-window-types'
@@ -10,6 +11,7 @@ export type WorkbenchWindowsApi = {
   open: (tabIds: string[]) => Promise<{ windowId: string } | null>
   publishSnapshot: (windowId: string, snapshot: WorkbenchSnapshot) => Promise<void>
   publishEditorContent: (windowId: string, content: WorkbenchEditorContent) => Promise<void>
+  publishNotice: (windowId: string, notice: WorkbenchNotice) => Promise<void>
   closeAll: () => Promise<void>
   onSnapshotRequested: (callback: (windowId: string) => void) => () => void
   onCommand: (callback: (relayed: WorkbenchRelayedCommand) => void) => () => void
@@ -19,4 +21,5 @@ export type WorkbenchWindowsApi = {
   sendCommand: (command: WorkbenchCommand) => Promise<void>
   onSnapshot: (callback: (snapshot: WorkbenchSnapshot) => void) => () => void
   onEditorContent: (callback: (content: WorkbenchEditorContent) => void) => () => void
+  onNotice: (callback: (notice: WorkbenchNotice) => void) => () => void
 }

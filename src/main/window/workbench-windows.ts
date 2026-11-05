@@ -11,7 +11,7 @@ import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   installCompanionWindowZoom,
   loadCompanionRendererEntry,
-  stepCompanionWindowZoom
+  stepSharedAppZoom
 } from './companion-window-chrome'
 
 const MIN_WIDTH = 480
@@ -24,6 +24,7 @@ const windowsById = new Map<string, BrowserWindow>()
 // Authority is the sender's webContents, never the window's own query string.
 const windowIdByContentsId = new Map<number, string>()
 const closedListeners = new Set<(windowId: string) => void>()
+let appZoomStore: Store | null = null
 
 function isLive(window: BrowserWindow | undefined): window is BrowserWindow {
   return Boolean(window && !window.isDestroyed() && !window.webContents.isDestroyed())
@@ -57,13 +58,13 @@ export function onWorkbenchWindowClosed(listener: (windowId: string) => void): (
   return () => closedListeners.delete(listener)
 }
 
-/** Zoom the focused workbench; false lets menu actions fall back to the main window. */
+/** Zoom the focused workbench (the app zoom it shares); false lets menu actions fall back to the main window. */
 export function zoomWorkbenchWindowIfFocused(direction: UIZoomDirection): boolean {
   const focused = listWorkbenchWindows().find((window) => window.isFocused())
   if (!focused) {
     return false
   }
-  stepCompanionWindowZoom(focused, direction)
+  stepSharedAppZoom(focused, direction, appZoomStore)
   return true
 }
 
@@ -111,7 +112,13 @@ export function createWorkbenchWindow(
   windowsById.set(windowId, window)
   windowIdByContentsId.set(contentsId, windowId)
 
-  const disposeZoom = installCompanionWindowZoom(window, store, options.getKeybindings)
+  appZoomStore = store
+  const disposeZoom = installCompanionWindowZoom(
+    window,
+    store,
+    options.getKeybindings,
+    (direction) => stepSharedAppZoom(window, direction, store)
+  )
   window.once('ready-to-show', () => {
     showWindowWithoutStealingFocus(window)
   })

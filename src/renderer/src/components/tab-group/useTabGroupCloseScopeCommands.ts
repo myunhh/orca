@@ -4,6 +4,21 @@ import { captureWorkspaceEmptiedReaction } from './workspace-emptied-reaction'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { useBulkTabCloseConfirmation } from '../use-bulk-tab-close-confirmation'
 import type { BulkTabCloseScope } from '../../../../shared/bulk-tab-close-confirmation'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import { mirrorWebRuntimeTabMove } from '../tab-bar/web-runtime-tab-move-mirror'
+
+function moveDetachedTabToGroup(worktreeId: string, tabId: string, groupId: string): void {
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    dropTabThroughLayoutOwner(worktreeId, { kind: 'move', tabId, groupId })
+  ) {
+    return
+  }
+  if (useAppStore.getState().dropUnifiedTab(tabId, { groupId })) {
+    mirrorWebRuntimeTabMove({ kind: 'move-to-group', worktreeId, tabId, targetGroupId: groupId })
+  }
+}
 
 export function useTabGroupCloseScopeCommands({
   groupId,
@@ -27,8 +42,9 @@ export function useTabGroupCloseScopeCommands({
       if (!group) {
         return []
       }
+      // Tabs a workbench window shows are not in this strip, so bulk closes leave them alone.
       const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-        (tab) => tab.groupId === groupId
+        (tab) => tab.groupId === groupId && state.detachedWindowIdByTabId[tab.id] === undefined
       )
       if (scope === 'editors') {
         return tabs
@@ -55,10 +71,20 @@ export function useTabGroupCloseScopeCommands({
 
   const closeGroup = useCallback(() => {
     const whenEmptied = captureWorkspaceEmptiedReaction(worktreeId)
-    const items = [...(useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? [])].filter(
+    const state = useAppStore.getState()
+    const items = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
       (item) => item.groupId === groupId
     )
-    for (const item of items) {
+    const isDetached = (tabId: string): boolean =>
+      state.detachedWindowIdByTabId[tabId] !== undefined
+    // Tabs a workbench window shows outlive this pane: they move to a surviving group, or keep it open.
+    const survivor = (state.groupsByWorktree[worktreeId] ?? []).find((g) => g.id !== groupId)
+    if (survivor) {
+      for (const item of items.filter((candidate) => isDetached(candidate.id))) {
+        moveDetachedTabToGroup(worktreeId, item.id, survivor.id)
+      }
+    }
+    for (const item of items.filter((candidate) => !isDetached(candidate.id))) {
       closeItem(item.id, { skipEmptyCheck: true })
     }
     // Why: closing tabs doesn't remove the group shell; empty split groups are layout state, collapse the placeholder pane here.

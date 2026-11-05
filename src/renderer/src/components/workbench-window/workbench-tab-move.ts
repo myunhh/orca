@@ -2,22 +2,19 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import type { TabGroup } from '../../../../shared/tab-types'
 import { canShowTabInWorkbenchWindow, findUnifiedTab } from './workbench-tab-eligibility'
 
-/** The tab a group should show once `leavingTabIds` move out: newest MRU entry first, then the nearest neighbor. */
-function successorInGroup(
+/** What a group shows instead of `unifiedTabId`: the newest MRU tab the main strip shows, then the nearest neighbor. */
+export function mainStripSuccessor(
   state: AppState,
+  group: TabGroup,
   unifiedTabId: string,
-  leavingTabIds: ReadonlySet<string>
+  leavingTabIds: ReadonlySet<string> = new Set()
 ): string | null {
-  const tab = findUnifiedTab(state, unifiedTabId)
-  const group = tab
-    ? (state.groupsByWorktree[tab.worktreeId] ?? []).find((g) => g.id === tab.groupId)
-    : undefined
-  if (!tab || !group || group.activeTabId !== unifiedTabId) {
-    return null
-  }
   const stays = (id: string): boolean =>
+    id !== unifiedTabId &&
     !leavingTabIds.has(id) &&
     state.detachedWindowIdByTabId[id] === undefined &&
     group.tabOrder.includes(id)
@@ -30,19 +27,41 @@ function successorInGroup(
   return after ?? group.tabOrder.slice(0, Math.max(index, 0)).toReversed().find(stays) ?? null
 }
 
+function successorInGroup(
+  state: AppState,
+  unifiedTabId: string,
+  leavingTabIds: ReadonlySet<string>
+): string | null {
+  const tab = findUnifiedTab(state, unifiedTabId)
+  const group = tab
+    ? (state.groupsByWorktree[tab.worktreeId] ?? []).find((g) => g.id === tab.groupId)
+    : undefined
+  if (!group || group.activeTabId !== unifiedTabId) {
+    return null
+  }
+  return mainStripSuccessor(state, group, unifiedTabId, leavingTabIds)
+}
+
 /** Show tabs in a workbench window and select what each group shows next; the tabs stay in their groups. */
 export function assignTabsToWorkbenchWindow(
   unifiedTabIds: readonly string[],
   windowId: string
 ): void {
   const state = useAppStore.getState()
+  // A preview tab is its group's replaceable slot; the next single-click open would swap it out of the window.
+  for (const tabId of unifiedTabIds) {
+    const tab = findUnifiedTab(state, tabId)
+    if (tab?.isPreview && isEditorTabContentType(tab.contentType)) {
+      state.makePreviewFilePermanent(tab.entityId, tab.id)
+    }
+  }
   const leaving = new Set(unifiedTabIds)
   const successors = unifiedTabIds
     .map((tabId) => successorInGroup(state, tabId, leaving))
     .filter((tabId): tabId is string => tabId !== null)
   state.assignTabsToWorkbenchWindow(unifiedTabIds, windowId)
   for (const successor of successors) {
-    useAppStore.getState().activateTab(successor, { recordFocus: false })
+    useAppStore.getState().activateTab(successor, { recordFocus: false, preservePreview: true })
   }
 }
 

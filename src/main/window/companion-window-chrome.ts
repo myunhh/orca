@@ -15,6 +15,17 @@ export function stepCompanionWindowZoom(window: BrowserWindow, direction: UIZoom
   webContents.setZoomLevel(stepUIZoomLevel(webContents.getZoomLevel(), direction))
 }
 
+/** A default-session companion shares the main window's origin zoom, so its step is the app zoom and must persist. */
+export function stepSharedAppZoom(
+  window: BrowserWindow,
+  direction: UIZoomDirection,
+  store: Store | null
+): void {
+  const next = stepUIZoomLevel(window.webContents.getZoomLevel(), direction)
+  window.webContents.setZoomLevel(next)
+  store?.updateUI({ uiZoomLevel: next })
+}
+
 const ZOOM_SHORTCUTS: readonly [KeybindingActionId, UIZoomDirection][] = [
   ['zoom.in', 'in'],
   ['zoom.out', 'out'],
@@ -40,7 +51,9 @@ function resolveZoomShortcut(
 export function installCompanionWindowZoom(
   window: BrowserWindow,
   store: Store | null,
-  getKeybindings: (() => KeybindingOverrides | undefined) | undefined
+  getKeybindings: (() => KeybindingOverrides | undefined) | undefined,
+  stepZoom: (direction: UIZoomDirection) => void = (direction) =>
+    stepCompanionWindowZoom(window, direction)
 ): () => void {
   // Apply persisted app zoom or the window always opens at 100%.
   window.webContents.on('dom-ready', () => {
@@ -68,7 +81,7 @@ export function installCompanionWindowZoom(
     const direction = resolveZoomShortcut(input, getKeybindings?.())
     if (direction) {
       event.preventDefault()
-      stepCompanionWindowZoom(window, direction)
+      stepZoom(direction)
     }
   })
 
@@ -81,7 +94,7 @@ export function installCompanionWindowZoom(
       })
     ) {
       event.preventDefault()
-      stepCompanionWindowZoom(window, direction)
+      stepZoom(direction)
     }
   })
   return () => unsubscribeUIChanged?.()

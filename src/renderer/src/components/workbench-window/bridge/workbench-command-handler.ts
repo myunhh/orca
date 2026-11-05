@@ -15,7 +15,8 @@ import { findUnifiedTab } from '../workbench-tab-eligibility'
 import { assignTabsToWorkbenchWindow } from '../workbench-tab-move'
 import { readWorkbenchEditorContent } from './workbench-editor-content-read'
 
-const REMOTE_TERMINAL_ADOPT_TIMEOUT_MS = 20_000
+// The host's frame lands shortly after creation resolves; adopting later could take a user's own new tab.
+const REMOTE_TERMINAL_ADOPT_GRACE_MS = 5_000
 
 type NewTerminalRoute =
   | { kind: 'unresolved' }
@@ -50,25 +51,47 @@ function terminalUnifiedTabIds(state: AppState, worktreeId: string): Set<string>
   )
 }
 
-/** A host-created terminal lands in a later layout frame; adopt the first new one into the window. */
-function adoptNextRemoteTerminal(worktreeId: string, windowId: string, before: Set<string>): void {
-  let settled = false
-  const finish = (): void => {
-    settled = true
+/** A host-created terminal lands in a later layout frame; adopt the first new one in the group into the window. */
+function adoptNextRemoteTerminal(
+  worktreeId: string,
+  groupId: string,
+  windowId: string
+): { stopAfterGrace: () => void; stop: () => void } {
+  const before = terminalUnifiedTabIds(useAppStore.getState(), worktreeId)
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const stop = (): void => {
     unsubscribe()
-    clearTimeout(timer)
+    if (timer) {
+      clearTimeout(timer)
+    }
   }
   const unsubscribe = useAppStore.subscribe((state, previous) => {
-    if (settled || state.unifiedTabsByWorktree === previous.unifiedTabsByWorktree) {
+    if (state.unifiedTabsByWorktree === previous.unifiedTabsByWorktree) {
       return
     }
-    const created = [...terminalUnifiedTabIds(state, worktreeId)].find((id) => !before.has(id))
+    const created = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (tab) => tab.contentType === 'terminal' && tab.groupId === groupId && !before.has(tab.id)
+    )
     if (created) {
-      finish()
-      assignTabsToWorkbenchWindow([created], windowId)
+      stop()
+      assignTabsToWorkbenchWindow([created.id], windowId)
     }
   })
-  const timer = setTimeout(finish, REMOTE_TERMINAL_ADOPT_TIMEOUT_MS)
+  return {
+    stop,
+    stopAfterGrace: () => {
+      timer ??= setTimeout(stop, REMOTE_TERMINAL_ADOPT_GRACE_MS)
+    }
+  }
+}
+
+function workspaceNotReadyError(): Error {
+  return new Error(
+    translate(
+      'components.workbench.window.bridge.workbench.command.handler.workspaceNotReady',
+      'This workspace is not ready for a new terminal yet.'
+    )
+  )
 }
 
 async function createTerminalForWindow(worktreeId: string, windowId: string): Promise<void> {
@@ -76,25 +99,27 @@ async function createTerminalForWindow(worktreeId: string, windowId: string): Pr
   const route = newTerminalRoute(state, worktreeId)
   const groupId = state.activeGroupIdByWorktree[worktreeId]
   if (route.kind === 'unresolved') {
-    throw new Error(
-      translate(
-        'components.workbench.window.bridge.workbench.command.handler.workspaceNotReady',
-        'This workspace is not ready for a new terminal yet.'
-      )
-    )
+    throw workspaceNotReadyError()
   }
   if (route.kind === 'runtime') {
     // Host terminals are created through the workspace's own "+" flow, which needs it shown.
-    if (state.activeWorktreeId !== worktreeId && !activateAndRevealWorkspace(worktreeId)) {
-      return
+    if (state.activeWorktreeId !== worktreeId) {
+      activateAndRevealWorkspace(worktreeId)
     }
     const latest = useAppStore.getState()
     const targetGroupId = latest.activeGroupIdByWorktree[worktreeId]
-    if (!targetGroupId) {
-      return
+    // Activation can be deferred (a workspace still being created); the "+" flow would target another one.
+    if (latest.activeWorktreeId !== worktreeId || !targetGroupId) {
+      throw workspaceNotReadyError()
     }
-    adoptNextRemoteTerminal(worktreeId, windowId, terminalUnifiedTabIds(latest, worktreeId))
-    await latest.openNewTerminalTabInActiveWorkspace(targetGroupId)
+    const adoption = adoptNextRemoteTerminal(worktreeId, targetGroupId, windowId)
+    try {
+      await latest.openNewTerminalTabInActiveWorkspace(targetGroupId)
+    } catch (error) {
+      adoption.stop()
+      throw error
+    }
+    adoption.stopAfterGrace()
     return
   }
   if (isWebClientLocation()) {
@@ -132,7 +157,13 @@ export function handleWorkbenchCommand({ windowId, command }: WorkbenchRelayedCo
   const state = useAppStore.getState()
   if (command.kind === 'newTerminal') {
     void createTerminalForWindow(command.worktreeId, windowId).catch((error: unknown) => {
-      toast.error(error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      const api = window.api.workbenchWindows
+      if (api) {
+        void api.publishNotice(windowId, { kind: 'error', message })
+      } else {
+        toast.error(message)
+      }
     })
     return
   }
