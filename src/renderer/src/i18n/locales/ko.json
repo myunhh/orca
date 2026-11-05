@@ -20010,7 +20010,10 @@
       "targetPlaceholder": "터미널 선택",
       "noOutput": "원본 터미널에 아직 공유할 출력이 없습니다.",
       "summaryUnavailable": "요약은 Orca 데스크톱 앱에서만 실행됩니다. 대신 화면을 그대로 보내세요.",
-      "readFailed": "원본 터미널을 읽지 못했습니다."
+      "readFailed": "원본 터미널을 읽지 못했습니다.",
+      "readHintNote": "Orca가 받는 에이전트를 위해 다음 줄을 덧붙입니다: {{line}}",
+      "targetNoAgent": "에이전트 없음",
+      "summaryFailed": "원본 터미널을 요약하지 못했습니다."
     }
   },
   "dashboardPopout": {

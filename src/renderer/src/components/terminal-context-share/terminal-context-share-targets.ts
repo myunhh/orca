@@ -13,6 +13,8 @@ export type TerminalContextShareTarget = {
   title: string
   worktreeLabel: string
   agentLabel: string | null
+  /** Handles are runtime-scoped: only same-runtime agents can reach this one with `orca terminal`. */
+  onSourceRuntime: boolean
 }
 
 const TARGET_LIST_TIMEOUT_MS = 8000
@@ -31,9 +33,11 @@ function worktreeLabel(terminal: RuntimeTerminalSummary): string {
 
 function toTarget(
   terminal: RuntimeTerminalSummary,
-  runtimeTarget: RuntimeClientTarget
+  runtimeTarget: RuntimeClientTarget,
+  onSourceRuntime: boolean
 ): TerminalContextShareTarget {
   return {
+    onSourceRuntime,
     key: `${runtimeTargetKey(runtimeTarget)}:${terminal.handle}`,
     handle: terminal.handle,
     runtimeTarget,
@@ -43,21 +47,25 @@ function toTarget(
   }
 }
 
-/** Live, writable terminals on every runtime involved, agents first; the source itself is excluded. */
+/** Live, writable terminals on the source's runtime plus extra runtimes, agents first; the source itself is excluded. */
 export async function listTerminalContextShareTargets(args: {
-  runtimeTargets: RuntimeClientTarget[]
+  sourceRuntimeTarget: RuntimeClientTarget
+  extraRuntimeTargets: RuntimeClientTarget[]
   sourceHandle: string
   signal?: AbortSignal
 }): Promise<{ targets: TerminalContextShareTarget[]; sourceAgentLabel: string | null }> {
+  const sourceRuntimeKey = runtimeTargetKey(args.sourceRuntimeTarget)
   const seen = new Set<string>()
-  const runtimeTargets = args.runtimeTargets.filter((target) => {
-    const key = runtimeTargetKey(target)
-    if (seen.has(key)) {
-      return false
+  const runtimeTargets = [args.sourceRuntimeTarget, ...args.extraRuntimeTargets].filter(
+    (target) => {
+      const key = runtimeTargetKey(target)
+      if (seen.has(key)) {
+        return false
+      }
+      seen.add(key)
+      return true
     }
-    seen.add(key)
-    return true
-  })
+  )
   const listings = await Promise.allSettled(
     runtimeTargets.map(async (runtimeTarget) => {
       const result = await callRuntimeRpc<RuntimeTerminalListResult>(
@@ -75,15 +83,16 @@ export async function listTerminalContextShareTargets(args: {
     if (listing.status !== 'fulfilled') {
       continue
     }
+    const onSourceRuntime = runtimeTargetKey(listing.value.runtimeTarget) === sourceRuntimeKey
     for (const terminal of listing.value.terminals) {
-      if (terminal.handle === args.sourceHandle) {
-        sourceAgentLabel = toTarget(terminal, listing.value.runtimeTarget).agentLabel
+      if (onSourceRuntime && terminal.handle === args.sourceHandle) {
+        sourceAgentLabel = toTarget(terminal, listing.value.runtimeTarget, true).agentLabel
         continue
       }
       if (terminal.orphaned || !terminal.connected || !terminal.writable) {
         continue
       }
-      targets.push(toTarget(terminal, listing.value.runtimeTarget))
+      targets.push(toTarget(terminal, listing.value.runtimeTarget, onSourceRuntime))
     }
   }
   if (targets.length === 0 && listings.every((listing) => listing.status === 'rejected')) {

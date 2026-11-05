@@ -21301,7 +21301,10 @@
       "targetPlaceholder": "Choose a terminal",
       "noOutput": "The source terminal has no output to share yet.",
       "summaryUnavailable": "Summaries run on the Orca desktop app. Send the raw screen instead.",
-      "readFailed": "Could not read the source terminal."
+      "readFailed": "Could not read the source terminal.",
+      "readHintNote": "Orca appends this line for the receiving agent: {{line}}",
+      "targetNoAgent": "No agent",
+      "summaryFailed": "Could not summarize the source terminal."
     }
   },
   "dashboardPopout": {

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -20,16 +21,26 @@ export function TerminalContextShareDialogShell({
   source,
   title,
   description,
+  sameRuntimeOnly = false,
   onClose,
   children
 }: {
   source: TerminalContextShareSource
   title: string
   description: string
+  /** Keep only targets whose handles resolve on the source's runtime. */
+  sameRuntimeOnly?: boolean
   onClose: () => void
   children: (endpoints: ReadyEndpoints) => React.ReactNode
 }): React.JSX.Element {
-  const endpoints = useTerminalContextShareEndpoints(source)
+  const loaded = useTerminalContextShareEndpoints(source)
+  const endpoints = useMemo(
+    () =>
+      sameRuntimeOnly && loaded.status === 'ready'
+        ? { ...loaded, targets: loaded.targets.filter((target) => target.onSourceRuntime) }
+        : loaded,
+    [loaded, sameRuntimeOnly]
+  )
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent surface="security" className="sm:max-w-xl" scrollable>

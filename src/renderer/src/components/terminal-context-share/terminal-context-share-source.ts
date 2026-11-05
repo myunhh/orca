@@ -3,7 +3,7 @@ import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remot
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { resolveTerminalHandleForPane } from '@/components/terminal-pane/terminal-handle-copy'
-import { getActiveTerminalNoteTarget } from '@/lib/active-agent-note-target'
+import { getActivePanePtyId, getActiveTerminalNoteTarget } from '@/lib/active-agent-note-target'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { TerminalContextShareSource } from './terminal-context-share-request'
@@ -24,11 +24,8 @@ export function terminalContextShareSourceForPane(
   if (!tab || !leafId) {
     return null
   }
-  const ptyId =
-    args.ptyId ??
-    layout?.ptyIdsByLeafId?.[leafId] ??
-    (state.ptyIdsByTabId[args.tabId] ?? [])[0] ??
-    null
+  // Null lets handle resolution go through the pane key instead of guessing another pane's PTY.
+  const ptyId = args.ptyId ?? getActivePanePtyId(state, { tabId: args.tabId, leafId })
   return {
     tabId: args.tabId,
     leafId,

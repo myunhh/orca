@@ -25,7 +25,8 @@ import {
   TerminalContextShareDialogShell,
   type TerminalContextShareReadyEndpoints
 } from './TerminalContextShareDialogShell'
-import { TerminalTargetSelect } from './TerminalTargetSelect'
+import { firstSelectableTargetKey, TerminalTargetSelect } from './TerminalTargetSelect'
+import { buildSourceReadHint } from './terminal-context-share-messages'
 import {
   useShareTerminalContext,
   type ShareTerminalContextStage
@@ -79,7 +80,9 @@ function ShareTerminalContextForm({
   onClose: () => void
 }): React.JSX.Element {
   const ids = useId()
-  const [targetKey, setTargetKey] = useState<string | null>(endpoints.targets[0]?.key ?? null)
+  const [targetKey, setTargetKey] = useState<string | null>(() =>
+    firstSelectableTargetKey(endpoints.targets)
+  )
   const [mode, setMode] = useState<TerminalContextReadMode>(
     window.api.terminalContext ? 'summary' : 'raw'
   )
@@ -209,7 +212,7 @@ function ShareTerminalContextForm({
           </Button>
           {progress ? (
             <span className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
               {progress}
             </span>
           ) : null}
@@ -233,6 +236,15 @@ function ShareTerminalContextForm({
               disabled={working}
               onChange={(event) => share.setPreview(event.target.value)}
             />
+            {target?.onSourceRuntime ? (
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'components.terminalContextShare.readHintNote',
+                  'Orca appends this line for the receiving agent: {{line}}',
+                  { line: buildSourceReadHint(endpoints.sourceHandle) }
+                )}
+              </p>
+            ) : null}
           </div>
         ) : null}
         {share.error ? (

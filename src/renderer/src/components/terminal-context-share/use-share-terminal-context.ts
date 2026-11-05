@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { TerminalContextSummaryModelChoice } from '../../../../shared/terminal-context-share/terminal-context-share-types'
+import {
+  TERMINAL_CONTEXT_TITLE_MAX_CHARS,
+  type TerminalContextSummaryModelChoice
+} from '../../../../shared/terminal-context-share/terminal-context-share-types'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
@@ -10,7 +13,8 @@ import {
 } from './terminal-context-source-read'
 import {
   buildSharedScreenMessage,
-  buildSharedSummaryMessage
+  buildSharedSummaryMessage,
+  buildSourceReadHint
 } from './terminal-context-share-messages'
 import {
   deliverTextToTerminal,
@@ -74,6 +78,10 @@ export function useShareTerminalContext(args: {
       const isCurrent = (): boolean => runRef.current === run
       setError(null)
       setStage('reading')
+      let failure = translate(
+        'components.terminalContextShare.readFailed',
+        'Could not read the source terminal.'
+      )
       try {
         const text = await readTerminalContextText({
           runtimeTarget: sourceRuntimeTarget,
@@ -84,7 +92,7 @@ export function useShareTerminalContext(args: {
         if (!isCurrent()) {
           return
         }
-        const source = { title: sourceTitle, handle: sourceHandle }
+        const source = { title: sourceTitle }
         if (!text.trim()) {
           setError(
             translate(
@@ -104,9 +112,14 @@ export function useShareTerminalContext(args: {
         } else {
           run.requestId = createBrowserUuid()
           setStage('summarizing')
+          failure = translate(
+            'components.terminalContextShare.summaryFailed',
+            'Could not summarize the source terminal.'
+          )
           const result = await window.api.terminalContext.summarize({
             requestId: run.requestId,
-            sourceTitle,
+            // Pane titles are OSC-controlled and unbounded; main rejects longer ones.
+            sourceTitle: sourceTitle.slice(0, TERMINAL_CONTEXT_TITLE_MAX_CHARS),
             sourceAgent,
             text,
             ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
@@ -130,12 +143,7 @@ export function useShareTerminalContext(args: {
         }
       } catch {
         if (isCurrent()) {
-          setError(
-            translate(
-              'components.terminalContextShare.readFailed',
-              'Could not read the source terminal.'
-            )
-          )
+          setError(failure)
         }
       } finally {
         if (isCurrent()) {
@@ -157,14 +165,17 @@ export function useShareTerminalContext(args: {
     async (target: TerminalContextShareTarget): Promise<TerminalContextDeliveryResult> => {
       setError(null)
       setStage('sending')
-      const result = await deliverTextToTerminal(target.runtimeTarget, target.handle, preview ?? '')
+      const text = target.onSourceRuntime
+        ? `${(preview ?? '').trimEnd()}\n${buildSourceReadHint(sourceHandle)}`
+        : (preview ?? '')
+      const result = await deliverTextToTerminal(target.runtimeTarget, target.handle, text)
       setStage('idle')
       if (!result.ok) {
         setError(result.message)
       }
       return result
     },
-    [preview]
+    [preview, sourceHandle]
   )
 
   return { stage, preview, setPreview, error, generate, cancel, send }

@@ -7,22 +7,25 @@ function quoteTitle(title: string): string {
 }
 
 export function buildSharedSummaryMessage(args: {
-  source: TerminalRef
+  source: Pick<TerminalRef, 'title'>
   modelName: string
   summary: string
 }): string {
   return [
-    `Context hand-off from another Orca terminal ${quoteTitle(args.source.title)} (terminal ${args.source.handle}), summarized by ${args.modelName}:`,
+    `Context hand-off from another Orca terminal ${quoteTitle(args.source.title)}, summarized by ${args.modelName}:`,
     '',
     args.summary.trim(),
     '',
-    `Use this as background for your work. To look at that terminal yourself: orca terminal read --terminal ${args.source.handle} --screen`
+    'Use this as background for your work.'
   ].join('\n')
 }
 
-export function buildSharedScreenMessage(args: { source: TerminalRef; screen: string }): string {
+export function buildSharedScreenMessage(args: {
+  source: Pick<TerminalRef, 'title'>
+  screen: string
+}): string {
   return [
-    `Screen snapshot from another Orca terminal ${quoteTitle(args.source.title)} (terminal ${args.source.handle}):`,
+    `Screen snapshot from another Orca terminal ${quoteTitle(args.source.title)}:`,
     '',
     '```text',
     args.screen.replace(/```/g, '`​``'),
@@ -30,6 +33,11 @@ export function buildSharedScreenMessage(args: { source: TerminalRef; screen: st
     '',
     'Use this as background for your work.'
   ].join('\n')
+}
+
+/** Appended only for targets on the source's runtime, where the handle resolves. */
+export function buildSourceReadHint(sourceHandle: string): string {
+  return `To look at that terminal yourself: orca terminal read --terminal ${sourceHandle} --screen`
 }
 
 export function buildTerminalLinkNote(args: { self: TerminalRef; partner: TerminalRef }): string {

@@ -38,7 +38,8 @@ export function useTerminalContextShareEndpoints(
       }
       try {
         const listing = await listTerminalContextShareTargets({
-          runtimeTargets: [sourceRuntimeTarget, { kind: 'local' }],
+          sourceRuntimeTarget,
+          extraRuntimeTargets: [{ kind: 'local' }],
           sourceHandle,
           signal: controller.signal
         })

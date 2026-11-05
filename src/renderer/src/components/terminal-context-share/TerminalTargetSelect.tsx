@@ -8,6 +8,10 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { TerminalContextShareTarget } from './terminal-context-share-targets'
 
+export function firstSelectableTargetKey(targets: TerminalContextShareTarget[]): string | null {
+  return targets.find((target) => target.agentLabel !== null)?.key ?? null
+}
+
 export function TerminalTargetSelect({
   id,
   targets,
@@ -33,12 +37,14 @@ export function TerminalTargetSelect({
       </SelectTrigger>
       <SelectContent position="popper">
         {targets.map((target) => (
-          <SelectItem key={target.key} value={target.key}>
+          // Guarded sends refuse terminals without an agent, so plain shells are shown but not selectable.
+          <SelectItem key={target.key} value={target.key} disabled={!target.agentLabel}>
             <span className="min-w-0 truncate">{target.title}</span>
             <span className="shrink-0 text-xs text-muted-foreground">
-              {target.agentLabel
-                ? `${target.worktreeLabel} · ${target.agentLabel}`
-                : target.worktreeLabel}
+              {`${target.worktreeLabel} · ${
+                target.agentLabel ??
+                translate('components.terminalContextShare.targetNoAgent', 'No agent')
+              }`}
             </span>
           </SelectItem>
         ))}

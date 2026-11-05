@@ -183,8 +183,9 @@ export async function findActiveRuntimeTerminal(
   )
 }
 
-function getActivePanePtyId(
-  state: ActiveTerminalNoteTargetState,
+/** Live PTY bound to the pane; null when a split pane's leaf has no live binding. */
+export function getActivePanePtyId(
+  state: Pick<ActiveTerminalNoteTargetState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
   noteTarget: ActiveTerminalNoteTarget
 ): string | null {
   const livePtyIds = state.ptyIdsByTabId?.[noteTarget.tabId] ?? []

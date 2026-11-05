@@ -10,7 +10,7 @@ import {
   TerminalContextShareDialogShell,
   type TerminalContextShareReadyEndpoints
 } from './TerminalContextShareDialogShell'
-import { TerminalTargetSelect } from './TerminalTargetSelect'
+import { firstSelectableTargetKey, TerminalTargetSelect } from './TerminalTargetSelect'
 import { buildTerminalLinkNote } from './terminal-context-share-messages'
 import { deliverTextToTerminal } from './terminal-context-share-delivery'
 
@@ -24,6 +24,7 @@ export default function LinkTerminalsDialog({
   return (
     <TerminalContextShareDialogShell
       source={source}
+      sameRuntimeOnly
       title={translate('components.terminalContextShare.linkTitle', 'Link Terminals')}
       description={translate(
         'components.terminalContextShare.linkDescription',
@@ -47,7 +48,14 @@ function LinkTerminalsForm({
   onClose: () => void
 }): React.JSX.Element {
   const ids = useId()
-  const [partnerKey, setPartnerKey] = useState<string | null>(endpoints.targets[0]?.key ?? null)
+  const [partnerKey, setPartnerKey] = useState<string | null>(() =>
+    firstSelectableTargetKey(endpoints.targets)
+  )
+  // Endpoints whose note already landed for the current partner; a retry must not re-prompt them.
+  const [delivered, setDelivered] = useState<{ source: boolean; partner: boolean }>({
+    source: false,
+    partner: false
+  })
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const partner = endpoints.targets.find((candidate) => candidate.key === partnerKey) ?? null
@@ -60,17 +68,24 @@ function LinkTerminalsForm({
     setSending(true)
     setError(null)
     const partnerRef = { title: partner.title, handle: partner.handle }
-    const toSource = await deliverTextToTerminal(
-      endpoints.sourceRuntimeTarget,
-      endpoints.sourceHandle,
-      buildTerminalLinkNote({ self, partner: partnerRef })
-    )
-    const toPartner = await deliverTextToTerminal(
-      partner.runtimeTarget,
-      partner.handle,
-      buildTerminalLinkNote({ self: partnerRef, partner: self })
-    )
+    const toSource = delivered.source
+      ? { ok: true as const }
+      : await deliverTextToTerminal(
+          endpoints.sourceRuntimeTarget,
+          endpoints.sourceHandle,
+          buildTerminalLinkNote({ self, partner: partnerRef })
+        )
+    // Without the source's note the partner would be told about a link that does not exist.
+    const toPartner =
+      !toSource.ok || delivered.partner
+        ? toSource
+        : await deliverTextToTerminal(
+            partner.runtimeTarget,
+            partner.handle,
+            buildTerminalLinkNote({ self: partnerRef, partner: self })
+          )
     setSending(false)
+    setDelivered({ source: toSource.ok, partner: toSource.ok && toPartner.ok })
     if (toSource.ok && toPartner.ok) {
       toast.success(
         translate(
@@ -107,7 +122,10 @@ function LinkTerminalsForm({
             targets={endpoints.targets}
             value={partnerKey}
             disabled={sending}
-            onChange={setPartnerKey}
+            onChange={(key) => {
+              setPartnerKey(key)
+              setDelivered({ source: false, partner: false })
+            }}
           />
         </div>
         {partner ? (
