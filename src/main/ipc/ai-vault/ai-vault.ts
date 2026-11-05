@@ -12,6 +12,7 @@ import {
 } from '../../ai-vault/cached-session-list'
 import { deleteAiVaultSession, registerAiVaultDeleteHandler } from './ai-vault-delete'
 import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
+import { registerAiVaultSubagentHandlers } from './agent-graph-ipc'
 import {
   aiVaultScanIssueResult,
   cancelledAiVaultListResult,
@@ -24,9 +25,7 @@ import {
   isAiVaultScanCancelledError,
   type AiVaultFirstUserPromptArgs,
   type AiVaultListArgs,
-  type AiVaultListResult,
-  type AiVaultSubagentListArgs,
-  type AiVaultSubagentListResult
+  type AiVaultListResult
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { handleAiVaultGetFirstUserPrompt } from '../../ai-vault/session-first-user-prompt-handler'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
@@ -288,11 +287,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     }
   )
   registerAiVaultResumeHandler(options)
-  ipcMain.handle(
-    'aiVault:listSubagentSessions',
-    (_event, args?: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>
-      listAiVaultSubagentSessions(args)
-  )
+  registerAiVaultSubagentHandlers()
   ipcMain.handle('aiVault:getFirstUserPrompt', (_event, args?: AiVaultFirstUserPromptArgs) =>
     handleAiVaultGetFirstUserPrompt(args)
   )

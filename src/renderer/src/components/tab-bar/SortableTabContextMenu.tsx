@@ -16,6 +16,8 @@ import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { MoveTabToNewWindowMenuItem } from './MoveTabToNewWindowMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { ShowAgentGraphMenuItem } from '../agent-graph/ShowAgentGraphMenuItem'
+import { tabAgentGraphPaneKey } from '../agent-graph/agent-graph-pane-options'
 
 const TAB_COLORS = [
   {
@@ -149,6 +151,9 @@ export function SortableTabContextMenu({
     worktreeId: tab.worktreeId,
     sessionId: nativeChat?.sessionId
   })
+  const agentGraphPaneKey = useAppStore((state) =>
+    open ? tabAgentGraphPaneKey(state, tab.id) : null
+  )
 
   return (
     <ContextMenuContent
@@ -205,6 +210,9 @@ export function SortableTabContextMenu({
         </ContextMenuItem>
       ) : null}
       <MoveTabToNewWindowMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
+      {agentGraphPaneKey ? (
+        <ShowAgentGraphMenuItem menuKind="context" paneKey={() => agentGraphPaneKey} />
+      ) : null}
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>

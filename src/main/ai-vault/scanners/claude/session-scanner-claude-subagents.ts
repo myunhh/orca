@@ -1,5 +1,4 @@
 import { basename, extname, join } from 'node:path'
-import { createInterface } from 'node:readline'
 import type {
   AiVaultScanIssue,
   AiVaultSession,
@@ -7,11 +6,6 @@ import type {
   AiVaultSubagentRunStatus
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
-  CLAUDE_TASK_NOTIFICATION_MARKER,
-  readClaudeTaskNotification
-} from '../../../../shared/claude-task-notification-text'
-import {
-  openTranscriptReadStream,
   wslGatedReaddir,
   wslGatedReadFile,
   wslGatedStat
@@ -26,7 +20,8 @@ import {
   SUBAGENT_TRANSCRIPT_PREFIX
 } from './session-scanner-subagent-transcripts'
 import { asRecord } from '../../session-scanner-record-value'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
+import { extractString } from '../../session-scanner-values'
+import { collectClaudeSubagentParentLinks } from './claude-subagent-parent-links'
 import { normalizeTitleText } from '../../session-scanner-text-normalization'
 
 // Without a terminal report, old transcripts have unknown status rather than remaining running.
@@ -36,10 +31,6 @@ const SUBAGENT_PARSE_CONCURRENCY = 8
 // Bulk subagent reads use scan priority; reserve the exact lane for live transcript probes.
 const SUBAGENT_FS_PRIORITY = 'scan'
 
-const TOOL_USE_RESULT_MARKER = '"toolUseResult"'
-// Require agentId to avoid decoding large ordinary tool outputs during the status pass.
-const TOOL_USE_RESULT_AGENT_ID_MARKER = '"agentId"'
-
 const TERMINAL_TASK_STATUSES: Record<string, AiVaultSubagentRunStatus> = {
   completed: 'completed',
   failed: 'failed',
@@ -47,9 +38,15 @@ const TERMINAL_TASK_STATUSES: Record<string, AiVaultSubagentRunStatus> = {
   stopped: 'stopped'
 }
 
-type ClaudeSubagentMeta = {
+export type ClaudeTranscriptParser = (
+  file: { path: string; mtimeMs: number; modifiedAt: string },
+  platform: NodeJS.Platform
+) => Promise<AiVaultSession | null>
+
+export type ClaudeSubagentMeta = {
   description: string | null
   agentType: string | null
+  toolUseId: string | null
 }
 
 /** Read subagents on demand; the main History scan prunes their subtrees. */
@@ -57,11 +54,17 @@ export async function listClaudeSubagentSessions(args: {
   parentFilePath: string
   platform?: NodeJS.Platform
   now?: number
+  /** Nested layouts (workflow runs) keep children outside the parent's own subagents dir. */
+  subagentsDir?: string
+  /** Callers that already scanned the parent pass its reports to avoid a second read. */
+  statusByAgentId?: ReadonlyMap<string, string>
+  /** Polling callers pass a cached parser so unchanged transcripts are not re-read. */
+  parseTranscript?: ClaudeTranscriptParser
 }): Promise<AiVaultSubagentListResult> {
   const platform = args.platform ?? process.platform
   const now = args.now ?? Date.now()
   const issues: AiVaultScanIssue[] = []
-  const subagentsDir = subagentTranscriptsDirFor(args.parentFilePath)
+  const subagentsDir = args.subagentsDir ?? subagentTranscriptsDirFor(args.parentFilePath)
 
   let entries
   try {
@@ -85,7 +88,10 @@ export async function listClaudeSubagentSessions(args: {
     return { sessions: [], issues }
   }
 
-  const statusByAgentId = await collectSubagentTaskStatuses(args.parentFilePath)
+  const statusByAgentId =
+    args.statusByAgentId ??
+    (await collectClaudeSubagentParentLinks(args.parentFilePath, { detailed: false }))
+      .statusByTaskId
   // Derive parent identity from the layout; missing subagent sessionId must not substitute its own filename.
   const parentSessionId = sessionIdFromFileName(args.parentFilePath)
   const parsed: (AiVaultSession | null)[] = []
@@ -100,7 +106,8 @@ export async function listClaudeSubagentSessions(args: {
           statusByAgentId,
           now,
           platform,
-          issues
+          issues,
+          parse: args.parseTranscript ?? parseClaudeSessionFile
         })
       )
     )
@@ -127,10 +134,11 @@ async function parseSubagentTranscript(args: {
   now: number
   platform: NodeJS.Platform
   issues: AiVaultScanIssue[]
+  parse: ClaudeTranscriptParser
 }): Promise<AiVaultSession | null> {
   try {
     const fileStat = await wslGatedStat(args.filePath, SUBAGENT_FS_PRIORITY)
-    const session = await parseClaudeSessionFile(
+    const session = await args.parse(
       {
         path: args.filePath,
         mtimeMs: fileStat.mtimeMs,
@@ -179,89 +187,17 @@ function resolveSubagentStatus(args: {
   return args.now - args.mtimeMs <= SUBAGENT_RUNNING_RECENCY_MS ? 'running' : null
 }
 
-// Sync Tasks use toolUseResult; background Tasks use notifications. The last reported status wins.
-async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<string, string>> {
-  const statuses = new Map<string, string>()
-  const input = openTranscriptReadStream(
-    parentFilePath,
-    { encoding: 'utf-8' },
-    SUBAGENT_FS_PRIORITY
-  )
-  const lines = createInterface({ input, crlfDelay: Infinity })
-  try {
-    for await (const line of lines) {
-      const hasNotification = line.includes(CLAUDE_TASK_NOTIFICATION_MARKER)
-      const hasTaskResult =
-        line.includes(TOOL_USE_RESULT_MARKER) && line.includes(TOOL_USE_RESULT_AGENT_ID_MARKER)
-      if (!hasNotification && !hasTaskResult) {
-        continue
-      }
-      const record = parseJsonObject(line)
-      if (!record) {
-        continue
-      }
-      // Quoted markers must fall through to toolUseResult; verbatim leading notifications lack provenance to distinguish them.
-      if (hasNotification) {
-        const text = taskNotificationText(record)
-        if (text.startsWith(CLAUDE_TASK_NOTIFICATION_MARKER)) {
-          const notification = readClaudeTaskNotification(text)
-          if (notification?.status) {
-            statuses.set(notification.taskId, notification.status)
-          }
-          continue
-        }
-      }
-      const result = asRecord(record.toolUseResult)
-      const agentId = extractString(result?.agentId)
-      const status = extractString(result?.status)
-      if (agentId && status) {
-        statuses.set(agentId, status)
-      }
-    }
-  } catch {
-    // A missing/unreadable parent transcript degrades to recency-only status.
-  } finally {
-    // readline.close() leaves its input open; destroy the gated stream even after read failures.
-    lines.close()
-    input.destroy()
-  }
-  return statuses
-}
-
-// Read full notification text: status can occur beyond title/preview truncation limits.
-function taskNotificationText(record: Record<string, unknown>): string {
-  const direct = extractString(record.content)
-  if (direct) {
-    return direct
-  }
-  const content = asRecord(record.message)?.content
-  if (typeof content === 'string') {
-    return content.trim()
-  }
-  if (Array.isArray(content)) {
-    return content.map(taskNotificationBlockText).filter(Boolean).join(' ').trim()
-  }
-  return ''
-}
-
-function taskNotificationBlockText(block: unknown): string {
-  if (typeof block === 'string') {
-    return block
-  }
-  const record = asRecord(block)
-  return extractString(record?.text) ?? extractString(record?.content) ?? ''
-}
-
-async function readSubagentMeta(transcriptPath: string): Promise<ClaudeSubagentMeta> {
+export async function readSubagentMeta(transcriptPath: string): Promise<ClaudeSubagentMeta> {
   const metaPath = `${transcriptPath.slice(0, -extname(transcriptPath).length)}.meta.json`
   try {
     const raw = await wslGatedReadFile(metaPath, 'utf-8', SUBAGENT_FS_PRIORITY)
     const record = asRecord(JSON.parse(raw) as unknown)
     return {
       description: normalizeTitleText(extractString(record?.description) ?? ''),
-      agentType: extractString(record?.agentType)
+      agentType: extractString(record?.agentType),
+      toolUseId: extractString(record?.toolUseId)
     }
   } catch {
-    return { description: null, agentType: null }
+    return { description: null, agentType: null, toolUseId: null }
   }
 }

@@ -25,6 +25,12 @@ import type {
 } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
 import type {
+  AgentGraphBuildArgs,
+  AgentGraphBuildResult,
+  AgentGraphNodeMessagesArgs,
+  AgentGraphNodeMessagesResult
+} from '../../shared/agent-graph/agent-graph-types'
+import type {
   AiVaultScanProgress,
   AiVaultScanProgressUpdate
 } from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
@@ -52,6 +58,11 @@ export type AiVaultApi = {
   ) => Promise<AiVaultPrepareSessionResumeResult>
   listSubagentSessions: (args: AiVaultSubagentListArgs) => Promise<AiVaultSubagentListResult>
   getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) => Promise<AiVaultFirstUserPromptResult>
+  /** Local transcripts only; main resolves the pane's session from hook identity. */
+  buildAgentGraph: (args: AgentGraphBuildArgs) => Promise<AgentGraphBuildResult>
+  readAgentGraphNodeMessages: (
+    args: AgentGraphNodeMessagesArgs
+  ) => Promise<AgentGraphNodeMessagesResult>
   /** Moves a deletable session's transcript to the OS trash; local sessions only. */
   deleteSession: (args: AiVaultDeleteSessionArgs) => Promise<AiVaultDeleteSessionResult>
   /** Fires when any app window regains OS focus. */

@@ -17,6 +17,10 @@ import type {
 import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeRequest } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { PreloadApi } from '../api-types'
+import type {
+  AgentGraphBuildArgs,
+  AgentGraphNodeMessagesArgs
+} from '../../shared/agent-graph/agent-graph-types'
 import {
   AI_VAULT_SCAN_PROGRESS_CHANNEL,
   type AiVaultScanProgress,
@@ -58,6 +62,9 @@ export const aiVaultApi = {
     ipcRenderer.invoke('aiVault:listSubagentSessions', args),
   getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) =>
     ipcRenderer.invoke('aiVault:getFirstUserPrompt', args),
+  buildAgentGraph: (args: AgentGraphBuildArgs) => ipcRenderer.invoke('agentGraph:build', args),
+  readAgentGraphNodeMessages: (args: AgentGraphNodeMessagesArgs) =>
+    ipcRenderer.invoke('agentGraph:readNodeMessages', args),
   deleteSession: (args: AiVaultDeleteSessionArgs): Promise<AiVaultDeleteSessionResult> =>
     ipcRenderer.invoke('aiVault:deleteSession', args),
   onWindowFocused: (callback: () => void): (() => void) => {

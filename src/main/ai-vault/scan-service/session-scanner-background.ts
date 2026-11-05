@@ -8,10 +8,13 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { ReadAiVaultFirstUserPromptArgs } from '../session-first-user-prompt-read'
+import type { AgentGraph } from '../../../shared/agent-graph/agent-graph-types'
+import type { AgentGraphBuildRequest } from '../agent-graph/agent-graph-builder'
 
 import {
   clearAiVaultServiceRestartCircuit,
   invalidateAiVaultServiceCache,
+  buildAgentGraphInService,
   listAiVaultSubagentSessionsInService,
   readAiVaultFirstUserPromptInService,
   resetAiVaultScannerServiceForTests,
@@ -49,6 +52,13 @@ export function listAiVaultSubagentSessionsInBackground(
   request: AiVaultServiceSubagentRequest
 ): Promise<AiVaultSubagentListResult> {
   return listAiVaultSubagentSessionsInService(request)
+}
+
+export function buildAgentGraphInBackground(
+  request: AgentGraphBuildRequest,
+  signal?: AbortSignal
+): Promise<AgentGraph> {
+  return buildAgentGraphInService(request, signal)
 }
 
 export async function readAiVaultFirstUserPromptInBackground(
