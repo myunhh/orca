@@ -54,8 +54,11 @@ export function listAiVaultSubagentSessionsInBackground(
   return listAiVaultSubagentSessionsInService(request)
 }
 
-export function buildAgentGraphInBackground(request: AgentGraphBuildRequest): Promise<AgentGraph> {
-  return buildAgentGraphInService(request)
+export function buildAgentGraphInBackground(
+  request: AgentGraphBuildRequest,
+  signal?: AbortSignal
+): Promise<AgentGraph> {
+  return buildAgentGraphInService(request, signal)
 }
 
 export async function readAiVaultFirstUserPromptInBackground(

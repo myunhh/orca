@@ -84,7 +84,13 @@ export type AgentGraphNodeMessagesResult =
       messages: AgentGraphMessage[]
       truncated: boolean
     }
-  | { ok: false; message: string }
+  | { ok: false; reason: AgentGraphNodeMessagesUnavailableReason; message: string }
+
+export type AgentGraphNodeMessagesUnavailableReason =
+  | 'invalid'
+  | 'not-admitted'
+  | 'desktop-only'
+  | 'unavailable'
 
 export const AGENT_GRAPH_MAX_NODES = 300
 export const AGENT_GRAPH_MAX_DEPTH = 6

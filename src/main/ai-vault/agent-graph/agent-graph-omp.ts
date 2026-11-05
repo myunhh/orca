@@ -10,6 +10,9 @@ import {
   type AgentGraphAccumulator
 } from './agent-graph-accumulator'
 import { AGENT_GRAPH_ROOT_NODE_ID, oldestFirst } from './agent-graph-claude-ids'
+import { AgentGraphFileMemo, agentGraphFileStamp } from './agent-graph-file-memo'
+
+const ompSessions = new AgentGraphFileMemo<AiVaultSession | null>()
 
 /** OMP links children only by artifact-directory membership; prompts come from message details. */
 export async function buildOmpAgentGraph(
@@ -48,11 +51,13 @@ export async function buildOmpAgentGraph(
 async function parseOmpTranscript(path: string): Promise<AiVaultSession | null> {
   try {
     const fileStat = await wslGatedStat(path, 'scan')
-    return await parseMessageGraphSessionFile('omp', {
-      path,
-      mtimeMs: fileStat.mtimeMs,
-      modifiedAt: fileStat.mtime.toISOString()
-    })
+    return await ompSessions.read(path, agentGraphFileStamp(fileStat), () =>
+      parseMessageGraphSessionFile('omp', {
+        path,
+        mtimeMs: fileStat.mtimeMs,
+        modifiedAt: fileStat.mtime.toISOString()
+      })
+    )
   } catch {
     return null
   }

@@ -109,11 +109,29 @@ export function listAiVaultSubagentSessionsInService(
   return getSharedClient().request({ type: 'request', operation: 'subagents', request }, signal)
 }
 
+// Graph polling gets its own child so a slow build never retires the History child or trips its circuit.
+let agentGraphClient: AiVaultScannerServiceClient | null = null
+const AGENT_GRAPH_SERVICE_IDLE_TIMEOUT_MS = 60_000
+
+function getAgentGraphClient(): AiVaultScannerServiceClient {
+  agentGraphClient ??= new AiVaultScannerServiceClient({
+    processFactory: spawnAiVaultServiceProcess,
+    // No parse-cache persistence or search index: those files belong to the History child.
+    init: () => ({ sessionParseCache: null, sessionSearch: null }),
+    onStderr: (text) => console.error('[agent-graph-service]', text.trimEnd()),
+    idleTimeoutMs: AGENT_GRAPH_SERVICE_IDLE_TIMEOUT_MS
+  })
+  return agentGraphClient
+}
+
 export function buildAgentGraphInService(
   request: AgentGraphBuildRequest,
   signal?: AbortSignal
 ): Promise<AgentGraph> {
-  return getSharedClient().request({ type: 'request', operation: 'agentGraph', request }, signal)
+  return getAgentGraphClient().request(
+    { type: 'request', operation: 'agentGraph', request },
+    signal
+  )
 }
 
 export function readAiVaultFirstUserPromptInService(
@@ -171,5 +189,7 @@ export function clearAiVaultServiceRestartCircuit(): void {
 export function resetAiVaultScannerServiceForTests(): void {
   sharedClient?.dispose()
   sharedClient = null
+  agentGraphClient?.dispose()
+  agentGraphClient = null
   idleTimeoutMs = undefined
 }

@@ -1,3 +1,4 @@
+import type { Stats } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { readActivity } from '../../../shared/codex-subagent-transcript'
 import { openTranscriptReadStream, wslGatedStat } from '../../native-chat/wsl-transcript-fs-access'
@@ -8,6 +9,7 @@ import {
 import { asRecord } from '../session-scanner-record-value'
 import { normalizeCodexUsage } from '../session-scanner-token-values'
 import { extractString, parseJsonObject } from '../session-scanner-values'
+import { AgentGraphFileMemo, agentGraphFileStamp } from './agent-graph-file-memo'
 
 export type CodexRolloutActivity = {
   threadId: string
@@ -29,19 +31,27 @@ export type CodexRolloutSummary = {
   startedAt: string | null
   updatedAt: string | null
   mtimeMs: number
-  /** Latest task_started/task_complete pair says the thread finished its last turn. */
+  /** Latest task_/turn_ started/complete pair says the thread finished its last turn. */
   complete: boolean
   activities: CodexRolloutActivity[]
 }
 
+const rollouts = new AgentGraphFileMemo<CodexRolloutSummary>()
+
 /** One streaming pass yields identity, usage, spawn activity, and the first/last exchanged text. */
 export async function readCodexRolloutSummary(path: string): Promise<CodexRolloutSummary | null> {
-  let mtimeMs: number
+  let fileStat: Stats
   try {
-    mtimeMs = (await wslGatedStat(path, 'scan')).mtimeMs
+    fileStat = await wslGatedStat(path, 'scan')
   } catch {
     return null
   }
+  return rollouts.read(path, agentGraphFileStamp(fileStat), () =>
+    scanCodexRollout(path, fileStat.mtimeMs)
+  )
+}
+
+async function scanCodexRollout(path: string, mtimeMs: number): Promise<CodexRolloutSummary> {
   const summary: CodexRolloutSummary = {
     path,
     threadId: null,
@@ -111,11 +121,14 @@ function consumeEventMessage(
       summary.lastAgentText = extractString(payload.message) ?? summary.lastAgentText
       return
     }
-    case 'task_started': {
+    // Newer Codex builds emit turn_* for the same lifecycle (see codex-turn-transcript).
+    case 'task_started':
+    case 'turn_started': {
       summary.complete = false
       return
     }
-    case 'task_complete': {
+    case 'task_complete':
+    case 'turn_complete': {
       summary.complete = true
       summary.lastAgentText = extractString(payload.last_agent_message) ?? summary.lastAgentText
       return

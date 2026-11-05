@@ -14,6 +14,10 @@ import {
   AI_VAULT_AGENT_SOURCES,
   sessionRowRootDirs
 } from '../../ai-vault/session-scanner-agent-sources'
+import {
+  needsWslHostResolution,
+  toHostReadableTranscriptPath
+} from '../../native-chat/host-readable-transcript-path'
 import { admitTranscriptPath } from '../../native-chat/transcript-path-admission'
 
 // Root discovery may probe WSL; graph refreshes poll, so reuse roots briefly.
@@ -48,18 +52,22 @@ export async function admitAgentGraphTranscript(
   if (!candidate.trim() || extname(candidate).toLowerCase() !== '.jsonl') {
     return null
   }
+  const hostPath = await hostReadableCandidate(candidate)
+  if (!hostPath) {
+    return null
+  }
   const roots = (await providerRoots())[provider]
   for (const root of roots) {
     // WSL UNC paths cannot be canonicalized here; fall back to the textual check the vault uses.
-    if (isWslUncPath(candidate) || isWslUncPath(root)) {
-      const resolved = resolve(candidate)
+    if (isWslUncPath(hostPath) || isWslUncPath(root)) {
+      const resolved = resolve(hostPath)
       if (isPathInsideOrEqual(resolve(root), resolved)) {
         return resolved
       }
       continue
     }
     try {
-      const admitted = await admitTranscriptPath(root, candidate)
+      const admitted = await admitTranscriptPath(root, hostPath)
       if (admitted) {
         return admitted.path
       }
@@ -68,6 +76,18 @@ export async function admitAgentGraphTranscript(
     }
   }
   return null
+}
+
+/** WSL hooks report guest paths; map them to the distro share (refusing stopped distros) like Chat does. */
+async function hostReadableCandidate(candidate: string): Promise<string | null> {
+  if (!needsWslHostResolution(candidate)) {
+    return candidate
+  }
+  try {
+    return await toHostReadableTranscriptPath(candidate)
+  } catch {
+    return null
+  }
 }
 
 /** Hook rows may omit the agent kind; the root that contains the transcript names it. */

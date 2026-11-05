@@ -6,6 +6,7 @@ import type {
 import { wslGatedReaddir } from '../../native-chat/wsl-transcript-fs-access'
 import type { ClaudeSubagentParentLinks } from '../scanners/claude/claude-subagent-parent-links'
 import { listClaudeSubagentSessions } from '../scanners/claude/session-scanner-claude-subagents'
+import { parseClaudeTranscriptCached } from './agent-graph-claude-reads'
 import { subagentTranscriptsDirFor } from '../scanners/claude/session-scanner-subagent-transcripts'
 import {
   agentGraphNodeFieldsFromSession,
@@ -82,7 +83,8 @@ async function addWorkflowRun(
   const listed = await listClaudeSubagentSessions({
     parentFilePath: args.parentPath,
     subagentsDir: runDir,
-    statusByAgentId: journal.statusByAgentId
+    statusByAgentId: journal.statusByAgentId,
+    parseTranscript: parseClaudeTranscriptCached
   })
   acc.addScanIssues(listed.issues)
   const children = oldestFirst(listed.sessions)

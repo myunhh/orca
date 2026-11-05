@@ -1,12 +1,8 @@
 import { basename } from 'node:path'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { wslGatedReaddir, wslGatedStat } from '../../native-chat/wsl-transcript-fs-access'
+import { wslGatedReaddir } from '../../native-chat/wsl-transcript-fs-access'
 import { sessionIdFromFileName } from '../session-scanner-accumulator'
-import {
-  collectClaudeSubagentParentLinks,
-  type ClaudeSubagentParentLinks
-} from '../scanners/claude/claude-subagent-parent-links'
-import { parseClaudeSessionFile } from '../scanners/claude/session-scanner-primary-parsers'
+import type { ClaudeSubagentParentLinks } from '../scanners/claude/claude-subagent-parent-links'
 import {
   listClaudeSubagentSessions,
   readSubagentMeta
@@ -18,6 +14,11 @@ import {
   type AgentGraphAccumulator
 } from './agent-graph-accumulator'
 import { addClaudeWorkflowNodes } from './agent-graph-claude-workflows'
+import {
+  parseClaudeTranscript,
+  parseClaudeTranscriptCached,
+  readClaudeParentLinks
+} from './agent-graph-claude-reads'
 import {
   AGENT_GRAPH_ROOT_NODE_ID,
   CLAUDE_WORKFLOWS_DIR_NAME,
@@ -58,19 +59,6 @@ export async function buildClaudeAgentGraph(
   return root?.sessionId ?? sessionIdFromFileName(rootPath)
 }
 
-export async function parseClaudeTranscript(path: string): Promise<AiVaultSession | null> {
-  try {
-    const fileStat = await wslGatedStat(path, 'scan')
-    return await parseClaudeSessionFile({
-      path,
-      mtimeMs: fileStat.mtimeMs,
-      modifiedAt: fileStat.mtime.toISOString()
-    })
-  } catch {
-    return null
-  }
-}
-
 /** Reads one transcript's spawn links and attaches its direct children, workflows, and their descendants. */
 export async function addClaudeChildNodes(
   acc: AgentGraphAccumulator,
@@ -83,10 +71,11 @@ export async function addClaudeChildNodes(
   if (entries.length === 0) {
     return
   }
-  const links = await collectClaudeSubagentParentLinks(args.parentPath, { detailed: true })
+  const links = await readClaudeParentLinks(args.parentPath)
   const listed = await listClaudeSubagentSessions({
     parentFilePath: args.parentPath,
-    statusByAgentId: links.statusByTaskId
+    statusByAgentId: links.statusByTaskId,
+    parseTranscript: parseClaudeTranscriptCached
   })
   acc.addScanIssues(listed.issues)
   const added: AiVaultSession[] = []

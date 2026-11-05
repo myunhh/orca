@@ -38,6 +38,11 @@ const TERMINAL_TASK_STATUSES: Record<string, AiVaultSubagentRunStatus> = {
   stopped: 'stopped'
 }
 
+export type ClaudeTranscriptParser = (
+  file: { path: string; mtimeMs: number; modifiedAt: string },
+  platform: NodeJS.Platform
+) => Promise<AiVaultSession | null>
+
 export type ClaudeSubagentMeta = {
   description: string | null
   agentType: string | null
@@ -53,6 +58,8 @@ export async function listClaudeSubagentSessions(args: {
   subagentsDir?: string
   /** Callers that already scanned the parent pass its reports to avoid a second read. */
   statusByAgentId?: ReadonlyMap<string, string>
+  /** Polling callers pass a cached parser so unchanged transcripts are not re-read. */
+  parseTranscript?: ClaudeTranscriptParser
 }): Promise<AiVaultSubagentListResult> {
   const platform = args.platform ?? process.platform
   const now = args.now ?? Date.now()
@@ -99,7 +106,8 @@ export async function listClaudeSubagentSessions(args: {
           statusByAgentId,
           now,
           platform,
-          issues
+          issues,
+          parse: args.parseTranscript ?? parseClaudeSessionFile
         })
       )
     )
@@ -126,10 +134,11 @@ async function parseSubagentTranscript(args: {
   now: number
   platform: NodeJS.Platform
   issues: AiVaultScanIssue[]
+  parse: ClaudeTranscriptParser
 }): Promise<AiVaultSession | null> {
   try {
     const fileStat = await wslGatedStat(args.filePath, SUBAGENT_FS_PRIORITY)
-    const session = await parseClaudeSessionFile(
+    const session = await args.parse(
       {
         path: args.filePath,
         mtimeMs: fileStat.mtimeMs,

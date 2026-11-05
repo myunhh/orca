@@ -19,8 +19,11 @@ const BUILDERS: Record<
   omp: buildOmpAgentGraph
 }
 
-export async function buildAgentGraph(request: AgentGraphBuildRequest): Promise<AgentGraph> {
-  const acc = new AgentGraphAccumulator(request.provider)
+export async function buildAgentGraph(
+  request: AgentGraphBuildRequest,
+  signal?: AbortSignal
+): Promise<AgentGraph> {
+  const acc = new AgentGraphAccumulator(request.provider, signal)
   const rootSessionId = await BUILDERS[request.provider](acc, request.transcriptPath)
   return acc.finish(rootSessionId, request.transcriptPath)
 }

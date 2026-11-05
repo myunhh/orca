@@ -13,13 +13,13 @@ import type {
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { agentHookServer } from '../../agent-hooks/server'
 import { readAgentGraphNodeMessages } from '../../ai-vault/agent-graph/agent-graph-node-messages'
-import { buildAgentGraphInBackground } from '../../ai-vault/scan-service/session-scanner-background'
 import { errorMessage } from '../../ai-vault/session-scanner-values'
 import {
   admitAgentGraphTranscript,
   inferAgentGraphProvider
 } from './agent-graph-transcript-admission'
 import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
+import { buildAgentGraphForSender } from './agent-graph-build-requests'
 
 const MAX_PANE_KEY_LENGTH = 256
 const MAX_PATH_LENGTH = 4096
@@ -53,7 +53,10 @@ function paneSessionFromHooks(paneKey: string): PaneSessionCandidate | null {
   }
 }
 
-export async function buildAgentGraphForPane(args: unknown): Promise<AgentGraphBuildResult> {
+export async function buildAgentGraphForPane(
+  args: unknown,
+  senderId: number
+): Promise<AgentGraphBuildResult> {
   const request = readBuildArgs(args)
   if (!request) {
     return { ok: false, reason: 'no-session', message: 'Invalid agent graph request' }
@@ -96,7 +99,7 @@ export async function buildAgentGraphForPane(args: unknown): Promise<AgentGraphB
     }
   }
   try {
-    return { ok: true, graph: await buildAgentGraphInBackground(admitted) }
+    return { ok: true, graph: await buildAgentGraphForSender(senderId, admitted) }
   } catch (error) {
     return { ok: false, reason: 'unavailable', message: errorMessage(error) }
   }
@@ -107,16 +110,20 @@ export async function readAgentGraphNodeMessagesForRenderer(
 ): Promise<AgentGraphNodeMessagesResult> {
   const request = readNodeMessagesArgs(args)
   if (!request) {
-    return { ok: false, message: 'Invalid message request' }
+    return { ok: false, reason: 'invalid', message: 'Invalid message request' }
   }
   const transcriptPath = await admitAgentGraphTranscript(request.provider, request.transcriptPath)
   if (!transcriptPath) {
-    return { ok: false, message: 'The transcript is outside the known local session folders' }
+    return {
+      ok: false,
+      reason: 'not-admitted',
+      message: 'The transcript is outside the known local session folders'
+    }
   }
   try {
     return await readAgentGraphNodeMessages({ provider: request.provider, transcriptPath })
   } catch (error) {
-    return { ok: false, message: errorMessage(error) }
+    return { ok: false, reason: 'unavailable', message: errorMessage(error) }
   }
 }
 
@@ -159,7 +166,9 @@ export function registerAiVaultSubagentHandlers(): void {
     (_event, args?: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>
       listAiVaultSubagentSessions(args)
   )
-  ipcMain.handle('agentGraph:build', (_event, args: unknown) => buildAgentGraphForPane(args))
+  ipcMain.handle('agentGraph:build', (event, args: unknown) =>
+    buildAgentGraphForPane(args, event.sender.id)
+  )
   ipcMain.handle('agentGraph:readNodeMessages', (_event, args: unknown) =>
     readAgentGraphNodeMessagesForRenderer(args)
   )

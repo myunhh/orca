@@ -3,6 +3,8 @@ import type { AiVaultServiceRequest } from './session-scanner-service-protocol'
 import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
 
 export const AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS = 15_000
+// Graphs of long sessions read many transcripts; they run in their own child, so waiting costs nothing shared.
+const AGENT_GRAPH_SERVICE_TIMEOUT_MS = 60_000
 
 export type AiVaultServiceScanListener = {
   work: (work: AiVaultScanWork) => void
@@ -16,7 +18,10 @@ function armAiVaultServiceRequestDeadline(
   if (call.request.operation === 'scan') {
     return
   }
-  const timeoutMs = AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS
+  const timeoutMs =
+    call.request.operation === 'agentGraph'
+      ? AGENT_GRAPH_SERVICE_TIMEOUT_MS
+      : AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS
   if (call.timer) {
     clearTimeout(call.timer)
   }

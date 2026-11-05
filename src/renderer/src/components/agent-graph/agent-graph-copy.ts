@@ -2,7 +2,8 @@ import type { AiVaultSubagentRunStatus } from '../../../../shared/ai-vault/contr
 import type {
   AgentGraphBuildResult,
   AgentGraphEdgeKind,
-  AgentGraphMessage
+  AgentGraphMessage,
+  AgentGraphNodeMessagesResult
 } from '../../../../shared/agent-graph/agent-graph-types'
 import { translate } from '@/i18n/i18n'
 import type { AgentDotState } from '../AgentStateDot'
@@ -85,4 +86,40 @@ export function agentGraphUnavailableCopy(
         }
       )
   }
+}
+
+export function agentGraphNodeMessagesUnavailableCopy(
+  result: Extract<AgentGraphNodeMessagesResult, { ok: false }>
+): string {
+  switch (result.reason) {
+    case 'invalid':
+      return translate(
+        'components.agentGraph.copy.transcriptInvalid',
+        'This transcript request was not valid.'
+      )
+    case 'not-admitted':
+      return translate(
+        'components.agentGraph.copy.transcriptNotAdmitted',
+        'The transcript is outside the known local session folders.'
+      )
+    case 'desktop-only':
+      return translate(
+        'components.agentGraph.copy.desktopOnly',
+        'Agent graphs are available in the desktop app.'
+      )
+    case 'unavailable':
+      return translate(
+        'components.agentGraph.copy.transcriptUnavailable',
+        'Could not read the transcript: {{detail}}',
+        { detail: result.message }
+      )
+  }
+}
+
+export function agentGraphIssuesSummary(count: number): string {
+  return translate(
+    'components.agentGraph.copy.issues',
+    'Some transcripts could not be read ({{count}}).',
+    { count }
+  )
 }

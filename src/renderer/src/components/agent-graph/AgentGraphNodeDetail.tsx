@@ -9,7 +9,11 @@ import type {
 import { formatSubagentTokens } from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
 import { Button } from '@/components/ui/button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
-import { agentGraphEdgeKindLabel, agentGraphMessageRoleLabel } from './agent-graph-copy'
+import {
+  agentGraphEdgeKindLabel,
+  agentGraphMessageRoleLabel,
+  agentGraphNodeMessagesUnavailableCopy
+} from './agent-graph-copy'
 import { agentGraphNodeEdges } from './agent-graph-layout'
 
 type AgentGraphNodeDetailProps = {
@@ -103,6 +107,7 @@ function useNodeMessages(node: AgentGraphNode): NodeMessagesState {
       .readAgentGraphNodeMessages({ provider, transcriptPath })
       .catch((error: unknown) => ({
         ok: false as const,
+        reason: 'unavailable' as const,
         message: error instanceof Error ? error.message : String(error)
       }))
       .then((result) => {
@@ -148,7 +153,9 @@ function TranscriptSection({
     return (
       <section>
         {heading}
-        <p className="mt-1 text-xs text-destructive">{result.message}</p>
+        <p className="mt-1 text-xs text-destructive">
+          {agentGraphNodeMessagesUnavailableCopy(result)}
+        </p>
       </section>
     )
   }

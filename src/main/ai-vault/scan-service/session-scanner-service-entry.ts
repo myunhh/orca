@@ -106,7 +106,10 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
       }
     }
     if (request.operation === 'agentGraph') {
-      return { operation: 'agentGraph', value: await buildAgentGraph(request.request) }
+      return {
+        operation: 'agentGraph',
+        value: await buildAgentGraph(request.request, controller.signal)
+      }
     }
     if (request.operation === 'firstPrompt') {
       return {

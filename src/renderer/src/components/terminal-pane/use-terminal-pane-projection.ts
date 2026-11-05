@@ -24,6 +24,7 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
+import { graphablePaneKey } from '../agent-graph/agent-graph-pane-options'
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
@@ -176,11 +177,15 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const activeLeafId = activePane?.leafId ?? null
   // One subscription for both reads keeps the pane inside its store listener budget.
-  const { menuAgentSessionId, activePaneCanResumeInChat } = useAppStore(
+  const { menuAgentSessionId, menuAgentGraphPaneKey, activePaneCanResumeInChat } = useAppStore(
     useShallow((state) => ({
       menuAgentSessionId:
         contextMenu.open && contextMenuLeafId
           ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
+          : null,
+      menuAgentGraphPaneKey:
+        contextMenu.open && contextMenuLeafId
+          ? graphablePaneKey(state.agentStatusByPaneKey, makePaneKey(tabId, contextMenuLeafId))
           : null,
       // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
       activePaneCanResumeInChat:
@@ -193,9 +198,6 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     }))
   )
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
-  // Only panes with a provider session have a transcript to graph.
-  const menuAgentGraphPaneKey =
-    menuAgentSessionId !== null && contextMenuLeafId ? makePaneKey(tabId, contextMenuLeafId) : null
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()
     if (!leafId) {

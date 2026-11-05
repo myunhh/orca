@@ -5,6 +5,8 @@ import type {
 } from '../../../../shared/agent-graph/agent-graph-types'
 
 const AUTO_REFRESH_MS = 5_000
+// Timeouts and unreadable transcripts rarely clear within seconds; back off instead of re-sending.
+const FAILED_REFRESH_MS = 30_000
 
 export type AgentGraphLoadState = {
   /** Last answer for the current pane; kept while a refresh runs so the canvas does not flash. */
@@ -13,7 +15,7 @@ export type AgentGraphLoadState = {
   refresh: () => void
 }
 
-/** Builds the pane's graph, then rebuilds every few seconds while the panel is visible. */
+/** Builds the pane's graph, then rebuilds every few seconds (slower after a failure) while visible. */
 export function useAgentGraph(args: {
   paneKey: string | null
   fallback: AgentGraphBuildArgs['fallback']
@@ -35,23 +37,27 @@ export function useAgentGraph(args: {
     }
     let cancelled = false
     let inFlight = false
+    let backoffUntil = 0
     const load = async (): Promise<void> => {
-      // A slow build must not stack polls behind it.
-      if (inFlight) {
+      // A slow build must not stack polls behind it; a failed one waits out its backoff.
+      if (inFlight || Date.now() < backoffUntil) {
         return
       }
       inFlight = true
       setLoading(true)
+      let failed = false
       try {
         const fallback = fallbackRef.current
         const result = await window.api.aiVault.buildAgentGraph({
           paneKey,
           ...(fallback ? { fallback } : {})
         })
+        failed = !result.ok
         if (!cancelled) {
           setState({ paneKey, result })
         }
       } catch (error) {
+        failed = true
         if (!cancelled) {
           setState({
             paneKey,
@@ -64,6 +70,7 @@ export function useAgentGraph(args: {
         }
       } finally {
         inFlight = false
+        backoffUntil = failed ? Date.now() + FAILED_REFRESH_MS : 0
         if (!cancelled) {
           setLoading(false)
         }

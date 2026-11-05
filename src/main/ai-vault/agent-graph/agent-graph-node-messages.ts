@@ -34,7 +34,7 @@ export async function readAgentGraphNodeMessages(args: {
     sourceOrder: true
   })
   if ('error' in result) {
-    return { ok: false, message: result.error }
+    return { ok: false, reason: 'unavailable', message: result.error }
   }
   const messages: AgentGraphMessage[] = []
   for (const message of result.messages) {

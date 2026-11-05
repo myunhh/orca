@@ -111,7 +111,8 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     // Why: graphs read local transcript files, which a paired browser cannot reach.
     buildAgentGraph: () =>
       Promise.resolve({ ok: false as const, reason: 'desktop-only' as const, message: '' }),
-    readAgentGraphNodeMessages: () => Promise.resolve({ ok: false as const, message: '' }),
+    readAgentGraphNodeMessages: () =>
+      Promise.resolve({ ok: false as const, reason: 'desktop-only' as const, message: '' }),
     // A browser can delete only on its own paired runtime, which validates the path itself.
     deleteSession: async (args: AiVaultDeleteSessionArgs) => {
       if (!addressesOwnRuntime(args.executionHostId)) {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Network, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,7 +14,7 @@ import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentGraphCanvas } from './AgentGraphCanvas'
 import { AgentGraphNodeDetail } from './AgentGraphNodeDetail'
-import { agentGraphUnavailableCopy } from './agent-graph-copy'
+import { agentGraphIssuesSummary, agentGraphUnavailableCopy } from './agent-graph-copy'
 import {
   activeTerminalPaneKey,
   agentGraphPaneOptions,
@@ -22,6 +22,9 @@ import {
 } from './agent-graph-pane-options'
 import { setAgentGraphTargetPane, useAgentGraphTargetStore } from './agent-graph-target'
 import { useAgentGraph } from './use-agent-graph'
+
+// Radix Select needs a non-empty value; real pane keys always contain a ':' separator.
+const FOLLOW_ACTIVE_PANE = 'follow-active-pane'
 
 export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): React.JSX.Element {
   useUiLanguageRevision()
@@ -31,6 +34,13 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
   const options = useMemo(() => agentGraphPaneOptions(statuses), [statuses])
   const paneKey = resolveAgentGraphPaneKey({ targetPaneKey, activePaneKey, options })
   const selectedOption = options.find((option) => option.paneKey === paneKey)
+  const targetIsLive = options.some((option) => option.paneKey === targetPaneKey)
+  useEffect(() => {
+    // A closed or no-longer-agent target falls back to following the active pane.
+    if (targetPaneKey && !targetIsLive) {
+      setAgentGraphTargetPane(null)
+    }
+  }, [targetPaneKey, targetIsLive])
   const { result, loading, refresh } = useAgentGraph({
     paneKey,
     fallback: selectedOption?.fallback,
@@ -49,8 +59,10 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-border px-2">
         <Select
-          value={paneKey ?? undefined}
-          onValueChange={(value) => setAgentGraphTargetPane(value)}
+          value={targetIsLive && targetPaneKey ? targetPaneKey : FOLLOW_ACTIVE_PANE}
+          onValueChange={(value) =>
+            setAgentGraphTargetPane(value === FOLLOW_ACTIVE_PANE ? null : value)
+          }
           disabled={options.length === 0}
         >
           <SelectTrigger size="sm" className="min-w-0 flex-1">
@@ -62,11 +74,19 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
             />
           </SelectTrigger>
           <SelectContent>
-            {paneKey && !selectedOption ? (
-              <SelectItem value={paneKey}>
-                {translate('components.agentGraph.AgentGraphPanel.selectedPane', 'Selected pane')}
-              </SelectItem>
-            ) : null}
+            <SelectItem value={FOLLOW_ACTIVE_PANE}>
+              <span className="truncate">
+                {translate(
+                  'components.agentGraph.AgentGraphPanel.followActivePane',
+                  'Follow active pane'
+                )}
+              </span>
+              {!targetIsLive && selectedOption ? (
+                <span className="truncate text-2xs text-muted-foreground">
+                  {selectedOption.label}
+                </span>
+              ) : null}
+            </SelectItem>
             {options.map((option) => (
               <SelectItem key={option.paneKey} value={option.paneKey}>
                 <span className="truncate">{option.label}</span>
@@ -107,11 +127,11 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
                     'Showing the first agents only; the graph hit its size limit.'
                   )
                 : null}
-              {graph.issues.map((issue) => (
-                <div key={issue} className="truncate" title={issue}>
-                  {issue}
+              {graph.issues.length > 0 ? (
+                <div className="truncate" title={graph.issues.join('\n')}>
+                  {agentGraphIssuesSummary(graph.issues.length)}
                 </div>
-              ))}
+              ) : null}
             </div>
           ) : null}
           <AgentGraphCanvas

@@ -13,6 +13,8 @@ import {
   type AgentGraphProvider
 } from '../../../shared/agent-graph/agent-graph-types'
 
+import { throwIfAiVaultScanCancelled } from '../ai-vault-scan-cancellation'
+
 const MAX_ISSUES = 20
 
 /** Collects nodes and edges under the shared caps so every provider builder truncates the same way. */
@@ -23,9 +25,14 @@ export class AgentGraphAccumulator {
   truncated = false
   private readonly nodeIds = new Set<string>()
 
-  constructor(readonly provider: AgentGraphProvider) {}
+  constructor(
+    readonly provider: AgentGraphProvider,
+    private readonly signal?: AbortSignal
+  ) {}
 
+  /** Builders check before each transcript read so a superseded build stops between files. */
   canDescend(depth: number): boolean {
+    throwIfAiVaultScanCancelled(this.signal)
     if (depth > AGENT_GRAPH_MAX_DEPTH) {
       this.truncated = true
       return false
@@ -38,6 +45,7 @@ export class AgentGraphAccumulator {
   }
 
   addNode(node: Omit<AgentGraphNode, 'provider'>): AgentGraphNode | null {
+    throwIfAiVaultScanCancelled(this.signal)
     if (this.nodeIds.has(node.id)) {
       return null
     }

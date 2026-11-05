@@ -19968,7 +19968,7 @@
       },
       "AgentGraphPanel": {
         "pickPane": "에이전트 창 선택",
-        "selectedPane": "선택한 창",
+        "followActivePane": "활성 창 따라가기",
         "refresh": "그래프 새로 고침",
         "truncated": "그래프 크기 제한에 도달해 앞쪽 에이전트만 표시합니다.",
         "noPanes": "터미널에서 Claude Code, Codex 또는 OMP를 실행하면 어떤 에이전트를 호출하는지 볼 수 있습니다.",
@@ -19989,7 +19989,11 @@
         "remoteHost": "원격 호스트의 세션에서는 아직 에이전트 그래프를 사용할 수 없습니다.",
         "notAdmitted": "세션 대화 기록이 알려진 로컬 세션 폴더 밖에 있습니다.",
         "desktopOnly": "에이전트 그래프는 데스크톱 앱에서 사용할 수 있습니다.",
-        "unavailable": "그래프를 만들 수 없습니다: {{detail}}"
+        "unavailable": "그래프를 만들 수 없습니다: {{detail}}",
+        "transcriptInvalid": "대화 기록 요청이 올바르지 않습니다.",
+        "transcriptNotAdmitted": "대화 기록이 알려진 로컬 세션 폴더 밖에 있습니다.",
+        "transcriptUnavailable": "대화 기록을 읽을 수 없습니다: {{detail}}",
+        "issues": "일부 대화 기록을 읽을 수 없습니다({{count}}개)."
       }
     },
     "rightSidebar": {
