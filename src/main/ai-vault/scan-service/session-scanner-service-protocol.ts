@@ -19,6 +19,8 @@ import type { ReadAiVaultFirstUserPromptArgs } from '../session-first-user-promp
 import type { SessionParseCachePersistenceOptions } from '../parse-cache/session-parse-cache-persistence'
 import type { AiVaultScanOptions } from '../session-scanner-types'
 import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
+import type { AgentGraph } from '../../../shared/agent-graph/agent-graph-types'
+import type { AgentGraphBuildRequest } from '../agent-graph/agent-graph-builder'
 
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
 
@@ -29,6 +31,7 @@ export type AiVaultServiceOperation =
   | 'scan'
   | 'titles'
   | 'subagents'
+  | 'agentGraph'
   | 'firstPrompt'
   | 'searchSessions'
   | 'searchStatus'
@@ -39,6 +42,7 @@ const AI_VAULT_SERVICE_OPERATIONS: ReadonlySet<string> = new Set<AiVaultServiceO
   'scan',
   'titles',
   'subagents',
+  'agentGraph',
   'firstPrompt',
   'searchSessions',
   'searchStatus',
@@ -76,6 +80,11 @@ export type AiVaultServiceRequestBody =
       type: 'request'
       operation: 'subagents'
       request: AiVaultServiceSubagentRequest
+    }
+  | {
+      type: 'request'
+      operation: 'agentGraph'
+      request: AgentGraphBuildRequest
     }
   | {
       type: 'request'
@@ -123,6 +132,7 @@ export type AiVaultServiceResultValue =
     }
   | { operation: 'titles'; value: AiVaultSessionTitlesResult }
   | { operation: 'subagents'; value: AiVaultSubagentListResult }
+  | { operation: 'agentGraph'; value: AgentGraph }
   | { operation: 'firstPrompt'; value: { prompt: string | null } }
   | { operation: 'searchSessions'; value: AiVaultSearchResponse }
   | { operation: 'searchStatus'; value: AiVaultSearchStatus }

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { Plug, Files, GitBranch, ListChecks, Network, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -122,6 +122,12 @@ export function useRightSidebarActivityItems({
         title: translate('auto.components.right.sidebar.index.441733b630', 'Ports'),
         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
         sshOnly: true
+      },
+      {
+        id: 'agent-graph',
+        icon: Network,
+        title: translate('components.rightSidebar.agentGraph.title', 'Agent Graph'),
+        shortcut: ''
       },
       // Append plugin tabs to preserve built-in navigation positions.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)

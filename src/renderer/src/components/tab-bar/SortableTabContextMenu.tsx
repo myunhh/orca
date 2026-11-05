@@ -15,6 +15,8 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { ShowAgentGraphMenuItem } from '../agent-graph/ShowAgentGraphMenuItem'
+import { tabAgentGraphPaneKey } from '../agent-graph/agent-graph-pane-options'
 
 const TAB_COLORS = [
   {
@@ -148,6 +150,9 @@ export function SortableTabContextMenu({
     worktreeId: tab.worktreeId,
     sessionId: nativeChat?.sessionId
   })
+  const agentGraphPaneKey = useAppStore((state) =>
+    open ? tabAgentGraphPaneKey(state, tab.id) : null
+  )
 
   return (
     <ContextMenuContent
@@ -202,6 +207,9 @@ export function SortableTabContextMenu({
             'Allow Auto-Close'
           )}
         </ContextMenuItem>
+      ) : null}
+      {agentGraphPaneKey ? (
+        <ShowAgentGraphMenuItem menuKind="context" paneKey={() => agentGraphPaneKey} />
       ) : null}
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <ContextMenuSeparator />

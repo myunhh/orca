@@ -38,6 +38,7 @@ import { AgentSessionContextCopyMenuItem } from './AgentSessionContextCopyMenuIt
 import { ClearPaneTitleMenuItem } from './ClearPaneTitleMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from './TerminalQuickCommandsSubmenu'
+import { ShowAgentGraphMenuItem } from '../agent-graph/ShowAgentGraphMenuItem'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -82,6 +83,8 @@ type TerminalContextMenuProps = {
   onCopyPaneId: () => void
   canCopyAgentSessionId: boolean
   onCopyAgentSessionId: () => void
+  /** The menu pane's key when its agent session can be graphed. */
+  agentGraphPaneKey?: string | null
 }
 
 export default function TerminalContextMenu(props: TerminalContextMenuProps): React.JSX.Element {
@@ -172,7 +175,8 @@ function TerminalContextMenuItems({
   onCopyTerminalId,
   onCopyPaneId,
   canCopyAgentSessionId,
-  onCopyAgentSessionId
+  onCopyAgentSessionId,
+  agentGraphPaneKey
 }: TerminalContextMenuProps): React.JSX.Element {
   // Why: one primary binding prevents Windows/Linux shortcut labels from forcing row wraps.
   const shortcuts = useMemo(
@@ -321,6 +325,7 @@ function TerminalContextMenuItems({
           )}
         </DropdownMenuItem>
       ) : null}
+      {agentGraphPaneKey ? <ShowAgentGraphMenuItem paneKey={() => agentGraphPaneKey} /> : null}
       <DropdownMenuItem onSelect={onCopyTerminalId}>
         <Copy />
         {translate(

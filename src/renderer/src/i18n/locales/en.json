@@ -21244,6 +21244,49 @@
           "bodyWithoutShortcut": "Right-click the pane for split options."
         }
       }
+    },
+    "agentGraph": {
+      "AgentGraphCanvas": {
+        "mainAgent": "Main agent"
+      },
+      "AgentGraphNodeDetail": {
+        "tokens": "{{tokens}} tokens",
+        "messageCount": "{{count}} messages",
+        "close": "Close details",
+        "transcript": "Transcript",
+        "loading": "Reading transcript…",
+        "olderSkipped": "Older messages are not shown."
+      },
+      "AgentGraphPanel": {
+        "pickPane": "Choose an agent pane",
+        "selectedPane": "Selected pane",
+        "refresh": "Refresh graph",
+        "truncated": "Showing the first agents only; the graph hit its size limit.",
+        "noPanes": "Start Claude Code, Codex, or OMP in a terminal to see which agents it calls.",
+        "loading": "Reading agent transcripts…"
+      },
+      "ShowAgentGraphMenuItem": {
+        "label": "Show Agent Graph"
+      },
+      "copy": {
+        "edgeSpawn": "spawn",
+        "edgeMessage": "message",
+        "edgeResult": "result",
+        "roleUser": "Prompt",
+        "roleAssistant": "Reply",
+        "roleTool": "Tool",
+        "noSession": "This pane has not reported an agent session transcript yet.",
+        "unsupportedAgent": "Agent graphs support Claude Code, Codex, and OMP sessions.",
+        "remoteHost": "Agent graphs are not available for sessions on remote hosts yet.",
+        "notAdmitted": "The session transcript is outside the known local session folders.",
+        "desktopOnly": "Agent graphs are available in the desktop app.",
+        "unavailable": "Could not build the graph: {{detail}}"
+      }
+    },
+    "rightSidebar": {
+      "agentGraph": {
+        "title": "Agent Graph"
+      }
     }
   },
   "dashboardPopout": {

@@ -108,6 +108,10 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
     // Why: full first-prompt re-parse is local-FS only; web/runtime falls back to preview text.
     getFirstUserPrompt: () => Promise.resolve({ prompt: null }),
+    // Why: graphs read local transcript files, which a paired browser cannot reach.
+    buildAgentGraph: () =>
+      Promise.resolve({ ok: false as const, reason: 'desktop-only' as const, message: '' }),
+    readAgentGraphNodeMessages: () => Promise.resolve({ ok: false as const, message: '' }),
     // A browser can delete only on its own paired runtime, which validates the path itself.
     deleteSession: async (args: AiVaultDeleteSessionArgs) => {
       if (!addressesOwnRuntime(args.executionHostId)) {

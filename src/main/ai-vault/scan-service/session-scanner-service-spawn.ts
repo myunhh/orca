@@ -18,6 +18,8 @@ import type {
 } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { withSpan } from '../../observability/tracer'
 import type { ReadAiVaultFirstUserPromptArgs } from '../session-first-user-prompt-read'
+import type { AgentGraph } from '../../../shared/agent-graph/agent-graph-types'
+import type { AgentGraphBuildRequest } from '../agent-graph/agent-graph-builder'
 
 import { sessionSearchServiceInit } from '../../ai-vault-search/session-search-service-init'
 import { getSessionParseCachePersistenceOptions } from '../parse-cache/session-parse-cache-persistence'
@@ -105,6 +107,13 @@ export function listAiVaultSubagentSessionsInService(
   signal?: AbortSignal
 ): Promise<AiVaultSubagentListResult> {
   return getSharedClient().request({ type: 'request', operation: 'subagents', request }, signal)
+}
+
+export function buildAgentGraphInService(
+  request: AgentGraphBuildRequest,
+  signal?: AbortSignal
+): Promise<AgentGraph> {
+  return getSharedClient().request({ type: 'request', operation: 'agentGraph', request }, signal)
 }
 
 export function readAiVaultFirstUserPromptInService(

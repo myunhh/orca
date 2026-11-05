@@ -193,6 +193,9 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     }))
   )
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
+  // Only panes with a provider session have a transcript to graph.
+  const menuAgentGraphPaneKey =
+    menuAgentSessionId !== null && contextMenuLeafId ? makePaneKey(tabId, contextMenuLeafId) : null
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()
     if (!leafId) {
@@ -215,6 +218,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     visibleTerminalError,
     menuPaneHasCustomTitle,
     menuAgentSessionId,
+    menuAgentGraphPaneKey,
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,

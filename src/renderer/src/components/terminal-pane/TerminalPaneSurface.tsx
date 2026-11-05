@@ -79,6 +79,7 @@ export function TerminalPaneSurface({
     managedPanes,
     managerRef,
     menuAgentSessionId,
+    menuAgentGraphPaneKey,
     menuPaneHasCustomTitle,
     openDiskSpaceAnalyzer,
     openQuickCommandEditor,
@@ -313,6 +314,7 @@ export function TerminalPaneSurface({
         onCopyPaneId={contextMenu.onCopyPaneId}
         canCopyAgentSessionId={menuAgentSessionId !== null}
         onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
+        agentGraphPaneKey={menuAgentGraphPaneKey}
       />
       <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
       {quickCommandEditorOpen ? (

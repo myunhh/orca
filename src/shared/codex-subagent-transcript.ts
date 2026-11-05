@@ -49,7 +49,7 @@ export type CodexSubagentTranscriptState = {
 }
 
 // Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
-function childDayDirectory(parentPath: string, startedAt: number): string | undefined {
+export function childDayDirectory(parentPath: string, startedAt: number): string | undefined {
   const dayDir = dirname(parentPath)
   const monthDir = dirname(dayDir)
   const yearDir = dirname(monthDir)
@@ -101,7 +101,7 @@ function resolveChildTranscript(
   return undefined
 }
 
-function readActivity(recordValue: JsonRecord):
+export function readActivity(recordValue: JsonRecord):
   | {
       id: string
       description?: string

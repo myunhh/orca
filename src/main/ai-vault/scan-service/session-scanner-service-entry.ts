@@ -24,6 +24,7 @@ import {
 import { readAiVaultSessionTitlesFromFiles } from '../session-titles/session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from '../session-titles/session-title-request-paths'
 import { listLocalAiVaultSubagentSessions } from '../session-subagent-reader'
+import { buildAgentGraph } from '../agent-graph/agent-graph-builder'
 import {
   noteWslDistroMayHaveStopped,
   noteWslDistroWoken
@@ -103,6 +104,9 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
         operation: 'subagents',
         value: await listLocalAiVaultSubagentSessions(request.request)
       }
+    }
+    if (request.operation === 'agentGraph') {
+      return { operation: 'agentGraph', value: await buildAgentGraph(request.request) }
     }
     if (request.operation === 'firstPrompt') {
       return {
