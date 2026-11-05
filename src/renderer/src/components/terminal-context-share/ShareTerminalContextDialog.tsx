@@ -137,7 +137,7 @@ function ShareTerminalContextForm({
           </Label>
           <TerminalTargetSelect
             id={`${ids}-target`}
-            targets={endpoints.targets}
+            terminals={endpoints.targets}
             value={targetKey}
             disabled={working}
             onChange={setTargetKey}

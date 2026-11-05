@@ -1639,11 +1639,11 @@
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
       "goalControl": {
+        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective.",
         "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
-        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing.",
-        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective."
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
       },
       "notices": {
         "compaction": "Context compacted",
@@ -2398,6 +2398,9 @@
         "sourceControlAgentUnsupported": "Choose a supported Source Control AI agent for this action in Settings -> Git -> Source Control AI. Supported agents: {{agents}}, or Custom command.",
         "sourceControlCustomCommandEmpty": "Custom command is empty. Add one in Settings -> Git -> Source Control AI.",
         "stagedChangesReadFailed": "Failed to read staged changes.",
+        "terminalContextEmpty": "No terminal output to summarize.",
+        "terminalContextSummaryBusy": "Another terminal context summary is already running.",
+        "terminalContextSummaryEmpty": "The generated summary was empty.",
         "timedOut": "Generation timed out after {{seconds}}s.",
         "windowsBatchUnsafeArguments": "{{label}} runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin."
       }

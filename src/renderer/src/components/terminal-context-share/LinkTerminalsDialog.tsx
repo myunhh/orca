@@ -133,7 +133,7 @@ function LinkTerminalsForm({
           </Label>
           <TerminalTargetSelect
             id={`${ids}-partner`}
-            targets={endpoints.targets}
+            terminals={endpoints.targets}
             value={partnerKey}
             disabled={sending}
             onChange={(key) => {

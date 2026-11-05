@@ -26,13 +26,13 @@ export function firstSelectableTargetKey(
 
 export function TerminalTargetSelect({
   id,
-  targets,
+  terminals,
   value,
   disabled,
   onChange
 }: {
   id: string
-  targets: TerminalContextShareTarget[]
+  terminals: TerminalContextShareTarget[]
   value: string | null
   disabled?: boolean
   onChange: (key: string) => void
@@ -48,13 +48,13 @@ export function TerminalTargetSelect({
         />
       </SelectTrigger>
       <SelectContent position="popper">
-        {targets.map((target) => (
+        {terminals.map((terminal) => (
           // Guarded sends refuse terminals without an agent, so plain shells are shown but not selectable.
-          <SelectItem key={target.key} value={target.key} disabled={!target.agentLabel}>
-            <span className="min-w-0 truncate">{target.title}</span>
+          <SelectItem key={terminal.key} value={terminal.key} disabled={!terminal.agentLabel}>
+            <span className="min-w-0 truncate">{terminal.title}</span>
             <span className="shrink-0 text-xs text-muted-foreground">
-              {`${target.worktreeLabel} · ${
-                target.agentLabel ??
+              {`${terminal.worktreeLabel} · ${
+                terminal.agentLabel ??
                 translate('components.terminalContextShare.targetNoAgent', 'No agent')
               }`}
             </span>
