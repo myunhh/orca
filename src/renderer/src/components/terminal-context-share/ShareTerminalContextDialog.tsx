@@ -19,7 +19,10 @@ import {
   TERMINAL_CONTEXT_INSTRUCTION_MAX_CHARS,
   TERMINAL_CONTEXT_SUMMARY_MODEL_CHOICES
 } from '../../../../shared/terminal-context-share/terminal-context-share-types'
-import type { TerminalContextShareSource } from './terminal-context-share-request'
+import type {
+  TerminalContextSharePreferredTarget,
+  TerminalContextShareSource
+} from './terminal-context-share-request'
 import type { TerminalContextReadMode } from './terminal-context-source-read'
 import {
   TerminalContextShareDialogShell,
@@ -47,9 +50,11 @@ function stageLabel(stage: ShareTerminalContextStage): string | null {
 
 export default function ShareTerminalContextDialog({
   source,
+  preferredTarget,
   onClose
 }: {
   source: TerminalContextShareSource
+  preferredTarget?: TerminalContextSharePreferredTarget
   onClose: () => void
 }): React.JSX.Element {
   return (
@@ -64,7 +69,12 @@ export default function ShareTerminalContextDialog({
       onClose={onClose}
     >
       {(endpoints) => (
-        <ShareTerminalContextForm source={source} endpoints={endpoints} onClose={onClose} />
+        <ShareTerminalContextForm
+          source={source}
+          preferredTarget={preferredTarget}
+          endpoints={endpoints}
+          onClose={onClose}
+        />
       )}
     </TerminalContextShareDialogShell>
   )
@@ -72,16 +82,18 @@ export default function ShareTerminalContextDialog({
 
 function ShareTerminalContextForm({
   source,
+  preferredTarget,
   endpoints,
   onClose
 }: {
   source: TerminalContextShareSource
+  preferredTarget?: TerminalContextSharePreferredTarget
   endpoints: TerminalContextShareReadyEndpoints
   onClose: () => void
 }): React.JSX.Element {
   const ids = useId()
   const [targetKey, setTargetKey] = useState<string | null>(() =>
-    firstSelectableTargetKey(endpoints.targets)
+    firstSelectableTargetKey(endpoints.targets, preferredTarget)
   )
   const [mode, setMode] = useState<TerminalContextReadMode>(
     window.api.terminalContext ? 'summary' : 'raw'

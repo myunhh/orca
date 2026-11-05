@@ -17,7 +17,12 @@ export function TerminalContextShareHost(): React.JSX.Element | null {
   const Dialog = request.kind === 'link' ? LinkTerminalsDialog : ShareTerminalContextDialog
   return (
     <Suspense fallback={null}>
-      <Dialog key={request.id} source={request.source} onClose={closeTerminalContextShareDialog} />
+      <Dialog
+        key={request.id}
+        source={request.source}
+        preferredTarget={request.preferredTarget}
+        onClose={closeTerminalContextShareDialog}
+      />
     </Suspense>
   )
 }

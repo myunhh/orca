@@ -21404,6 +21404,14 @@
       "readHintNote": "Orca appends this line for the receiving agent: {{line}}",
       "targetNoAgent": "No agent",
       "summaryFailed": "Could not summarize the source terminal."
+    },
+    "workbenchWindow": {
+      "WorkbenchTerminalShareActions": {
+        "shareToPartner": "Share Context to Other Pane…",
+        "share": "Share Context to Terminal…",
+        "linkToPartner": "Link with Other Pane…",
+        "link": "Link with Terminal…"
+      }
     }
   },
   "dashboardPopout": {

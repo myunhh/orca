@@ -13,6 +13,8 @@ export type TerminalContextShareTarget = {
   title: string
   worktreeLabel: string
   agentLabel: string | null
+  tabId: string
+  leafId: string
   /** Handles are runtime-scoped: only same-runtime agents can reach this one with `orca terminal`. */
   onSourceRuntime: boolean
 }
@@ -40,6 +42,8 @@ function toTarget(
     onSourceRuntime,
     key: `${runtimeTargetKey(runtimeTarget)}:${terminal.handle}`,
     handle: terminal.handle,
+    tabId: terminal.tabId,
+    leafId: terminal.leafId,
     runtimeTarget,
     title: terminal.paneTitle || terminal.title || terminal.handle,
     worktreeLabel: worktreeLabel(terminal),

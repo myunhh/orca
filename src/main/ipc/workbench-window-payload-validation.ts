@@ -67,6 +67,7 @@ function isTerminalView(value: unknown): boolean {
     isRecord(value) &&
     (value.root === null || isLayoutNode(value.root, 0)) &&
     (value.activeLeafId === null || isId(value.activeLeafId)) &&
+    (value.runtimeEnvironmentId === null || isId(value.runtimeEnvironmentId)) &&
     Array.isArray(value.panes) &&
     value.panes.length <= WORKBENCH_MAX_PANES_PER_TAB &&
     value.panes.every(isPane)

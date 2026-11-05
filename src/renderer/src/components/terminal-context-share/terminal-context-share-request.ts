@@ -15,10 +15,14 @@ export type TerminalContextShareSource = {
 
 export type TerminalContextShareKind = 'share' | 'link'
 
+/** Terminal to preselect as the target, e.g. the other half of a split view. */
+export type TerminalContextSharePreferredTarget = { tabId: string; leafId: string | null }
+
 type TerminalContextShareRequest = {
   id: number
   kind: TerminalContextShareKind
   source: TerminalContextShareSource
+  preferredTarget?: TerminalContextSharePreferredTarget
 }
 
 // Own store, not activeModal: detached windows mount the host without the app's modal slice.
@@ -28,23 +32,36 @@ export const useTerminalContextShareRequest = create<{
 
 let nextRequestId = 1
 
-function openRequest(kind: TerminalContextShareKind, source: TerminalContextShareSource): void {
-  useTerminalContextShareRequest.setState({ request: { id: nextRequestId++, kind, source } })
+function openRequest(
+  kind: TerminalContextShareKind,
+  source: TerminalContextShareSource,
+  preferredTarget?: TerminalContextSharePreferredTarget
+): void {
+  useTerminalContextShareRequest.setState({
+    request: { id: nextRequestId++, kind, source, preferredTarget }
+  })
 }
 
-export function openShareTerminalContextDialog(args: { source: TerminalContextShareSource }): void {
-  openRequest('share', args.source)
+export function openShareTerminalContextDialog(args: {
+  source: TerminalContextShareSource
+  preferredTarget?: TerminalContextSharePreferredTarget
+}): void {
+  openRequest('share', args.source, args.preferredTarget)
 }
 
-export function openLinkTerminalsDialog(args: { source: TerminalContextShareSource }): void {
-  openRequest('link', args.source)
+export function openLinkTerminalsDialog(args: {
+  source: TerminalContextShareSource
+  preferredTarget?: TerminalContextSharePreferredTarget
+}): void {
+  openRequest('link', args.source, args.preferredTarget)
 }
 
 export function openTerminalContextShareDialog(
   kind: TerminalContextShareKind,
-  source: TerminalContextShareSource
+  source: TerminalContextShareSource,
+  preferredTarget?: TerminalContextSharePreferredTarget
 ): void {
-  openRequest(kind, source)
+  openRequest(kind, source, preferredTarget)
 }
 
 export function closeTerminalContextShareDialog(): void {

@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
-import type { TerminalContextShareSource } from './terminal-context-share-request'
+import type {
+  TerminalContextSharePreferredTarget,
+  TerminalContextShareSource
+} from './terminal-context-share-request'
 import {
   TerminalContextShareDialogShell,
   type TerminalContextShareReadyEndpoints
@@ -16,9 +19,11 @@ import { deliverTextToTerminal } from './terminal-context-share-delivery'
 
 export default function LinkTerminalsDialog({
   source,
+  preferredTarget,
   onClose
 }: {
   source: TerminalContextShareSource
+  preferredTarget?: TerminalContextSharePreferredTarget
   onClose: () => void
 }): React.JSX.Element {
   return (
@@ -33,23 +38,32 @@ export default function LinkTerminalsDialog({
       )}
       onClose={onClose}
     >
-      {(endpoints) => <LinkTerminalsForm source={source} endpoints={endpoints} onClose={onClose} />}
+      {(endpoints) => (
+        <LinkTerminalsForm
+          source={source}
+          preferredTarget={preferredTarget}
+          endpoints={endpoints}
+          onClose={onClose}
+        />
+      )}
     </TerminalContextShareDialogShell>
   )
 }
 
 function LinkTerminalsForm({
   source,
+  preferredTarget,
   endpoints,
   onClose
 }: {
   source: TerminalContextShareSource
+  preferredTarget?: TerminalContextSharePreferredTarget
   endpoints: TerminalContextShareReadyEndpoints
   onClose: () => void
 }): React.JSX.Element {
   const ids = useId()
   const [partnerKey, setPartnerKey] = useState<string | null>(() =>
-    firstSelectableTargetKey(endpoints.targets)
+    firstSelectableTargetKey(endpoints.targets, preferredTarget)
   )
   // Endpoints whose note already landed for the current partner; a retry must not re-prompt them.
   const [delivered, setDelivered] = useState<{ source: boolean; partner: boolean }>({

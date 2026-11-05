@@ -7,6 +7,9 @@ import { StrictMode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Toaster } from './components/ui/sonner'
 import { WorkbenchWindowRoot } from './components/workbench-window/WorkbenchWindowRoot'
+import { registerWorkbenchPaneHeaderActions } from './components/workbench-window/workbench-pane-header-actions'
+import { renderWorkbenchTerminalShareActions } from './components/workbench-window/WorkbenchTerminalShareActions'
+import { TerminalContextShareHost } from './components/terminal-context-share/TerminalContextShareHost'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   installRendererCrashDiagnostics,
@@ -31,6 +34,10 @@ installRendererCrashDiagnostics('workbench-window')
 setReactCommitCascadeRendererSurface('workbench-window')
 
 seedCompanionWindowSettings()
+const unregisterShareActions = registerWorkbenchPaneHeaderActions(
+  renderWorkbenchTerminalShareActions
+)
+import.meta.hot?.dispose(unregisterShareActions)
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -60,6 +67,7 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
     <I18nProvider>
       <CompanionWindowSettingsSync />
       <WorkbenchRoot />
+      <TerminalContextShareHost />
       <Toaster />
     </I18nProvider>
   </StrictMode>

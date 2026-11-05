@@ -28,6 +28,7 @@ import {
   terminalTabActivityToAgentDotState
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { findUnifiedTab, isWorkbenchViewableFile } from '../workbench-tab-eligibility'
 
@@ -81,7 +82,12 @@ function buildTerminalPanes(
         : null
     }
   })
-  return { root, activeLeafId: layout?.activeLeafId ?? null, panes }
+  return {
+    root,
+    activeLeafId: layout?.activeLeafId ?? null,
+    panes,
+    runtimeEnvironmentId: runtimeEnvironmentIdOrLocalUnlessTwin(state, terminalTab.worktreeId)
+  }
 }
 
 function buildEditorView(state: AppState, tab: Tab): WorkbenchEditorTabView | null {

@@ -7,9 +7,21 @@ import {
 } from '@/components/ui/select'
 import { translate } from '@/i18n/i18n'
 import type { TerminalContextShareTarget } from './terminal-context-share-targets'
+import type { TerminalContextSharePreferredTarget } from './terminal-context-share-request'
 
-export function firstSelectableTargetKey(targets: TerminalContextShareTarget[]): string | null {
-  return targets.find((target) => target.agentLabel !== null)?.key ?? null
+export function firstSelectableTargetKey(
+  targets: TerminalContextShareTarget[],
+  preferred?: TerminalContextSharePreferredTarget
+): string | null {
+  const selectable = targets.filter((target) => target.agentLabel !== null)
+  const match = preferred
+    ? selectable.find(
+        (target) =>
+          target.tabId === preferred.tabId &&
+          (preferred.leafId === null || target.leafId === preferred.leafId)
+      )
+    : undefined
+  return (match ?? selectable[0])?.key ?? null
 }
 
 export function TerminalTargetSelect({

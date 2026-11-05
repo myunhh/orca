@@ -20113,6 +20113,14 @@
       "readHintNote": "Orca가 받는 에이전트를 위해 다음 줄을 덧붙입니다: {{line}}",
       "targetNoAgent": "에이전트 없음",
       "summaryFailed": "원본 터미널을 요약하지 못했습니다."
+    },
+    "workbenchWindow": {
+      "WorkbenchTerminalShareActions": {
+        "shareToPartner": "다른 분할 창에 컨텍스트 공유…",
+        "share": "터미널에 컨텍스트 공유…",
+        "linkToPartner": "다른 분할 창과 연결…",
+        "link": "터미널과 연결…"
+      }
     }
   },
   "dashboardPopout": {

@@ -15,6 +15,8 @@ export type WorkbenchTerminalTabView = {
   root: TerminalPaneLayoutNode | null
   activeLeafId: string | null
   panes: WorkbenchTerminalPane[]
+  /** Paired runtime that owns the terminal, or null for this desktop; the window has no worktree store. */
+  runtimeEnvironmentId: string | null
 }
 
 export type WorkbenchEditorTabView = {
