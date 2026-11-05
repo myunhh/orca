@@ -19984,14 +19984,16 @@
         "WorkbenchWindowRoot": {
           "title": "Orca",
           "loading": "Orca에 연결하는 중…",
-          "empty": "이 창에 탭이 없습니다"
+          "empty": "이 창에 탭이 없습니다",
+          "windowName": "창 {{windowNumber}}"
         },
         "bridge": {
           "workbench": {
             "command": {
               "handler": {
                 "workspaceNotReady": "이 워크스페이스는 아직 새 터미널을 열 준비가 되지 않았습니다.",
-                "adoptUnavailable": "이 탭은 더 이상 추가할 수 없습니다."
+                "adoptUnavailable": "이 탭은 더 이상 추가할 수 없습니다.",
+                "windowFull": "이 창에는 더 이상 탭을 추가할 수 없습니다."
               }
             },
             "editor": {
@@ -20008,7 +20010,11 @@
           "tab": {
             "move": {
               "openFailed": "새 창을 열 수 없습니다",
-              "windowClosed": "해당 창이 더 이상 열려 있지 않습니다"
+              "windowClosed": "해당 창이 더 이상 열려 있지 않습니다",
+              "windowFull": "해당 창에는 더 이상 탭을 추가할 수 없습니다"
+            },
+            "label": {
+              "floatingTerminal": "플로팅 터미널"
             }
           }
         },
@@ -20016,7 +20022,9 @@
           "addExisting": "기존 탭 추가…",
           "search": "메인 창의 탭 검색…",
           "splitHint": "탭이 분할 화면의 오른쪽 절반에 열립니다.",
-          "empty": "메인 창에 열려 있는 다른 탭이 없습니다."
+          "empty": "메인 창에 열려 있는 다른 탭이 없습니다.",
+          "noMatches": "일치하는 탭이 없습니다",
+          "truncated": "처음 {{count}}개의 탭만 표시됩니다."
         }
       }
     },

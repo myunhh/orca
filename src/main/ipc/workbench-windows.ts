@@ -1,13 +1,16 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import type { WorkbenchSnapshot } from '../../shared/workbench-window/workbench-window-types'
+import type {
+  WorkbenchSnapshot,
+  WorkbenchWindowEntry
+} from '../../shared/workbench-window/workbench-window-types'
 import {
   closeAllWorkbenchWindows,
   createWorkbenchWindow,
   getWorkbenchWindow,
   getWorkbenchWindowIdForSender,
-  listWorkbenchWindowIds,
+  listWorkbenchWindowEntries,
   onWorkbenchWindowClosed
 } from '../window/workbench-windows'
 import { safelyRevealWindow } from '../window/focus-existing-window'
@@ -84,8 +87,8 @@ export function registerWorkbenchWindowHandlers(
   })
 
   // Main's registry is the authority on which windows still exist; the renderer's map can lag a close.
-  ipcMain.handle('workbench:listWindows', (event): string[] =>
-    isTrustedUIRenderer(event.sender) ? listWorkbenchWindowIds() : []
+  ipcMain.handle('workbench:listWindows', (event): WorkbenchWindowEntry[] =>
+    isTrustedUIRenderer(event.sender) ? listWorkbenchWindowEntries() : []
   )
 
   ipcMain.handle('workbench:publishSnapshot', (event, args: unknown): void => {

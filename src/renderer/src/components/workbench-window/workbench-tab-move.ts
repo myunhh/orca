@@ -4,7 +4,9 @@ import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import type { TabGroup } from '../../../../shared/tab-types'
+import { WORKBENCH_MAX_TABS } from '../../../../shared/workbench-window/workbench-window-types'
 import { canShowTabInWorkbenchWindow, findUnifiedTab } from './workbench-tab-eligibility'
+import { countWorkbenchWindowTabs } from './workbench-window-summaries'
 
 /** What a group shows instead of `unifiedTabId`: the newest MRU tab the main strip shows, then the nearest neighbor. */
 export function mainStripSuccessor(
@@ -102,14 +104,14 @@ export async function moveTabsToExistingWorkbenchWindow(
   if (movable.length === 0 || !api) {
     return
   }
-  const openWindowIds = await api.listWindows().catch((): string[] => [])
+  const openWindows = await api.listWindows().catch(() => [])
   // Re-read after the await: the tab may have closed or moved meanwhile.
   const state = useAppStore.getState()
   const stillMovable = movable.filter(
     (tabId) =>
       canShowTabInWorkbenchWindow(state, tabId) && state.detachedWindowIdByTabId[tabId] !== windowId
   )
-  if (!openWindowIds.includes(windowId)) {
+  if (!openWindows.some((entry) => entry.windowId === windowId)) {
     toast.error(
       translate(
         'components.workbench.window.workbench.tab.move.windowClosed',
@@ -118,7 +120,18 @@ export async function moveTabsToExistingWorkbenchWindow(
     )
     return
   }
-  if (stillMovable.length > 0) {
-    assignTabsToWorkbenchWindow(stillMovable, windowId)
+  if (stillMovable.length === 0) {
+    return
   }
+  const shown = countWorkbenchWindowTabs(state.detachedWindowIdByTabId, windowId)
+  if (shown + stillMovable.length > WORKBENCH_MAX_TABS) {
+    toast.error(
+      translate(
+        'components.workbench.window.workbench.tab.move.windowFull',
+        'That window cannot hold more tabs'
+      )
+    )
+    return
+  }
+  assignTabsToWorkbenchWindow(stillMovable, windowId)
 }

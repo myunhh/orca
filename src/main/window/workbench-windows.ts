@@ -7,6 +7,7 @@ import { showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import type { UIZoomDirection } from '../../shared/ui-zoom-level'
 import type { KeybindingOverrides } from '../../shared/keybindings'
+import type { WorkbenchWindowEntry } from '../../shared/workbench-window/workbench-window-types'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   installCompanionWindowZoom,
@@ -23,6 +24,7 @@ const CASCADE_OFFSET = 28
 const windowsById = new Map<string, BrowserWindow>()
 // Authority is the sender's webContents, never the window's own query string.
 const windowIdByContentsId = new Map<number, string>()
+const ordinalByWindowId = new Map<string, number>()
 const closedListeners = new Set<(windowId: string) => void>()
 let appZoomStore: Store | null = null
 
@@ -52,8 +54,20 @@ export function listWorkbenchWindows(): BrowserWindow[] {
   return [...windowsById.values()].filter(isLive)
 }
 
-export function listWorkbenchWindowIds(): string[] {
-  return [...windowsById.keys()].filter((windowId) => getWorkbenchWindow(windowId) !== null)
+export function listWorkbenchWindowEntries(): WorkbenchWindowEntry[] {
+  return [...ordinalByWindowId]
+    .filter(([windowId]) => getWorkbenchWindow(windowId) !== null)
+    .map(([windowId, ordinal]) => ({ windowId, ordinal }))
+}
+
+// Smallest free number, so names stay short and never shift while a window is open.
+function nextWindowOrdinal(): number {
+  const used = new Set(ordinalByWindowId.values())
+  let ordinal = 1
+  while (used.has(ordinal)) {
+    ordinal += 1
+  }
+  return ordinal
 }
 
 /** Subscribe to workbench window closes in the main process. */
@@ -113,8 +127,10 @@ export function createWorkbenchWindow(
   })
   installPrivilegedWindowNavigationPolicy(window.webContents)
   const contentsId = window.webContents.id
+  const ordinal = nextWindowOrdinal()
   windowsById.set(windowId, window)
   windowIdByContentsId.set(contentsId, windowId)
+  ordinalByWindowId.set(windowId, ordinal)
 
   appZoomStore = store
   const disposeZoom = installCompanionWindowZoom(
@@ -131,12 +147,13 @@ export function createWorkbenchWindow(
     disposeZoom()
     windowsById.delete(windowId)
     windowIdByContentsId.delete(contentsId)
+    ordinalByWindowId.delete(windowId)
     for (const listener of closedListeners) {
       listener(windowId)
     }
   })
 
-  loadCompanionRendererEntry(window, 'workbench.html', { windowId })
+  loadCompanionRendererEntry(window, 'workbench.html', { windowId, ordinal: String(ordinal) })
   return { windowId, window }
 }
 

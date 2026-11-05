@@ -9,8 +9,6 @@ type SummaryState = Pick<
 
 export type WorkbenchWindowSummary = {
   windowId: string
-  /** 1-based, in the order the open windows first received a tab. */
-  ordinal: number
   firstTabLabel: string | null
   tabCount: number
 }
@@ -21,7 +19,7 @@ export function summarizeWorkbenchWindows(state: SummaryState): WorkbenchWindowS
   for (const [tabId, windowId] of Object.entries(state.detachedWindowIdByTabId)) {
     let summary = byWindowId.get(windowId)
     if (!summary) {
-      summary = { windowId, ordinal: byWindowId.size + 1, firstTabLabel: null, tabCount: 0 }
+      summary = { windowId, firstTabLabel: null, tabCount: 0 }
       byWindowId.set(windowId, summary)
     }
     summary.tabCount += 1
@@ -31,4 +29,12 @@ export function summarizeWorkbenchWindows(state: SummaryState): WorkbenchWindowS
     }
   }
   return [...byWindowId.values()]
+}
+
+/** Tabs a window shows or will show; a full window would silently drop more. */
+export function countWorkbenchWindowTabs(
+  detachedWindowIdByTabId: AppState['detachedWindowIdByTabId'],
+  windowId: string
+): number {
+  return Object.values(detachedWindowIdByTabId).filter((id) => id === windowId).length
 }

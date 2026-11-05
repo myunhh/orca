@@ -108,8 +108,10 @@ function isAdoptableTab(value: unknown): value is WorkbenchAdoptableTab {
   return (
     isRecord(value) &&
     isId(value.tabId) &&
+    isId(value.worktreeId) &&
     isText(value.label) &&
     isText(value.worktreeLabel) &&
+    isNullableText(value.repoLabel) &&
     (value.kind === 'terminal' || value.kind === 'editor') &&
     isNullableText(value.agentState, 64) &&
     typeof value.isImage === 'boolean'
@@ -133,13 +135,20 @@ export function admitWorkbenchSnapshot(value: unknown): WorkbenchSnapshot | null
   }
   const pendingTabCount = value.pendingTabCount
   if (
+    typeof value.adoptableTabsTruncated !== 'boolean' ||
     typeof pendingTabCount !== 'number' ||
     !Number.isSafeInteger(pendingTabCount) ||
     pendingTabCount < 0
   ) {
     return null
   }
-  return { tabs: value.tabs, pendingTabCount, adoptableTabs, generatedAt: value.generatedAt }
+  return {
+    tabs: value.tabs,
+    pendingTabCount,
+    adoptableTabs,
+    adoptableTabsTruncated: value.adoptableTabsTruncated,
+    generatedAt: value.generatedAt
+  }
 }
 
 export function admitWorkbenchCommand(value: unknown): WorkbenchCommand | null {
@@ -201,7 +210,14 @@ export function admitWorkbenchTabIds(value: unknown): string[] | null {
 }
 
 export function admitWorkbenchNotice(value: unknown): WorkbenchNotice | null {
-  return isRecord(value) && value.kind === 'error' && isText(value.message) && value.message
-    ? { kind: 'error', message: value.message }
+  if (!isRecord(value) || value.kind !== 'error' || !isText(value.message) || !value.message) {
+    return null
+  }
+  const rejected = value.rejectedAdoptTabId
+  if (rejected === undefined) {
+    return { kind: 'error', message: value.message }
+  }
+  return isId(rejected)
+    ? { kind: 'error', message: value.message, rejectedAdoptTabId: rejected }
     : null
 }

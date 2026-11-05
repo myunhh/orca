@@ -2,12 +2,33 @@ import type { AppState } from '@/store/types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { translate } from '@/i18n/i18n'
+import { getNotificationWorkspaceLabels } from '@/components/terminal-pane/terminal-notification-state'
 import {
   resolveTerminalTabActivityStatus,
   terminalTabActivityToAgentDotState
 } from '@/components/tab-bar/terminal-tab-activity-status'
 
 type LabelState = Pick<AppState, 'tabsByWorktree' | 'openFiles' | 'settings'>
+
+/** Workspace names a workbench window shows; floating terminals have no worktree row to name them. */
+export function workbenchWorkspaceLabels(
+  state: AppState,
+  worktreeId: string
+): { worktreeLabel: string; repoLabel: string | null } {
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return {
+      worktreeLabel: translate(
+        'components.workbench.window.workbench.tab.label.floatingTerminal',
+        'Floating terminal'
+      ),
+      repoLabel: null
+    }
+  }
+  const labels = getNotificationWorkspaceLabels(state, worktreeId)
+  return { worktreeLabel: labels.worktreeLabel, repoLabel: labels.repoLabel || null }
+}
 
 export function findTerminalTabRow(
   state: Pick<AppState, 'tabsByWorktree'>,

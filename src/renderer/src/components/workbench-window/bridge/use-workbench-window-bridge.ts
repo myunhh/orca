@@ -24,12 +24,18 @@ function workbenchInputsChanged(state: AppState, previous: AppState): boolean {
     state.runtimePaneTitlesByTabId !== previous.runtimePaneTitlesByTabId ||
     state.paneForegroundAgentByPaneKey !== previous.paneForegroundAgentByPaneKey ||
     state.groupsByWorktree !== previous.groupsByWorktree ||
+    state.activeWorktreeId !== previous.activeWorktreeId ||
     state.settings !== previous.settings
   )
 }
 
 function snapshotKey(snapshot: WorkbenchSnapshot): string {
-  return JSON.stringify([snapshot.tabs, snapshot.pendingTabCount, snapshot.adoptableTabs])
+  return JSON.stringify([
+    snapshot.tabs,
+    snapshot.pendingTabCount,
+    snapshot.adoptableTabs,
+    snapshot.adoptableTabsTruncated
+  ])
 }
 
 /** Publish per-window snapshots and run window commands; keep subscriptions out of the effect body for cleanup clarity. */
@@ -43,7 +49,7 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
     timer = null
     lastPublishAt = Date.now()
     const state = useAppStore.getState()
-    const { snapshotsByWindowId, staleTabIds, adoptableTabs } = buildWorkbenchSnapshots(
+    const { snapshotsByWindowId, staleTabIds, adoptable } = buildWorkbenchSnapshots(
       state,
       lastPublishAt
     )
@@ -53,7 +59,8 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
         snapshotsByWindowId.set(windowId, {
           tabs: [],
           pendingTabCount: 0,
-          adoptableTabs,
+          adoptableTabs: adoptable.tabs,
+          adoptableTabsTruncated: adoptable.truncated,
           generatedAt: lastPublishAt
         })
       }

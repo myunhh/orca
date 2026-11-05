@@ -24,6 +24,14 @@ import { useWorkbenchWindowModel } from './use-workbench-window-model'
 
 const NO_ADOPTABLE_TABS: readonly WorkbenchAdoptableTab[] = []
 
+// Display-only: main assigns it so the main window's "Move to Window" names match this title.
+function readWindowOrdinal(): number | null {
+  const ordinal = Number(new URLSearchParams(window.location.search).get('ordinal'))
+  return Number.isSafeInteger(ordinal) && ordinal > 0 ? ordinal : null
+}
+
+const WINDOW_ORDINAL = readWindowOrdinal()
+
 function WorkbenchTabBody({ tab }: { tab: WorkbenchTabView }): React.JSX.Element | null {
   if (tab.kind === 'terminal' && tab.terminal) {
     return <WorkbenchTerminalBody terminal={tab.terminal} />
@@ -88,7 +96,16 @@ export function WorkbenchWindowRoot(): React.JSX.Element {
     []
   )
 
-  const windowTitle = translate('components.workbench.window.WorkbenchWindowRoot.title', 'Orca')
+  const appTitle = translate('components.workbench.window.WorkbenchWindowRoot.title', 'Orca')
+  const windowName =
+    WINDOW_ORDINAL === null
+      ? null
+      : translate(
+          'components.workbench.window.WorkbenchWindowRoot.windowName',
+          'Window {{windowNumber}}',
+          { windowNumber: WINDOW_ORDINAL }
+        )
+  const windowTitle = windowName ? `${windowName} — ${appTitle}` : appTitle
   useEffect(() => {
     document.title = activeTab ? `${activeTab.label} — ${windowTitle}` : windowTitle
   }, [activeTab, windowTitle])
@@ -142,6 +159,7 @@ export function WorkbenchWindowRoot(): React.JSX.Element {
         <WorkbenchTabStrip
           tabs={tabs}
           adoptableTabs={model.snapshot?.adoptableTabs ?? NO_ADOPTABLE_TABS}
+          adoptableTabsTruncated={model.snapshot?.adoptableTabsTruncated ?? false}
           activeTabId={activeTab?.tabId ?? null}
           splitEnabled={model.splitEnabled}
           onActivate={model.activate}

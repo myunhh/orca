@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { WorkbenchRelayedCommand } from '../../../../../shared/workbench-window/workbench-window-types'
+import { WORKBENCH_MAX_TABS } from '../../../../../shared/workbench-window/workbench-window-types'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
@@ -14,6 +15,7 @@ import { translate } from '@/i18n/i18n'
 import { canShowTabInWorkbenchWindow, findUnifiedTab } from '../workbench-tab-eligibility'
 import { findTerminalTabRow } from '../workbench-tab-label'
 import { assignTabsToWorkbenchWindow } from '../workbench-tab-move'
+import { countWorkbenchWindowTabs } from '../workbench-window-summaries'
 import { readWorkbenchEditorContent } from './workbench-editor-content-read'
 
 // The host's frame lands shortly after creation resolves; adopting later could take a user's own new tab.
@@ -95,8 +97,23 @@ function workspaceNotReadyError(): Error {
   )
 }
 
+// Snapshots drop views past the cap, so a tab added to a full window would vanish from both windows.
+function isWindowFull(state: AppState, windowId: string): boolean {
+  return countWorkbenchWindowTabs(state.detachedWindowIdByTabId, windowId) >= WORKBENCH_MAX_TABS
+}
+
+function windowFullMessage(): string {
+  return translate(
+    'components.workbench.window.bridge.workbench.command.handler.windowFull',
+    'This window cannot hold more tabs.'
+  )
+}
+
 async function createTerminalForWindow(worktreeId: string, windowId: string): Promise<void> {
   const state = useAppStore.getState()
+  if (isWindowFull(state, windowId)) {
+    throw new Error(windowFullMessage())
+  }
   const route = newTerminalRoute(state, worktreeId)
   const groupId = state.activeGroupIdByWorktree[worktreeId]
   if (route.kind === 'unresolved') {
@@ -140,10 +157,10 @@ async function createTerminalForWindow(worktreeId: string, windowId: string): Pr
   }
 }
 
-function notifyWindow(windowId: string, message: string): void {
+function notifyWindow(windowId: string, message: string, rejectedAdoptTabId?: string): void {
   const api = window.api.workbenchWindows
   if (api) {
-    void api.publishNotice(windowId, { kind: 'error', message })
+    void api.publishNotice(windowId, { kind: 'error', message, rejectedAdoptTabId })
   } else {
     toast.error(message)
   }
@@ -163,8 +180,13 @@ function adoptTabIntoWindow(tabId: string, windowId: string): void {
       translate(
         'components.workbench.window.bridge.workbench.command.handler.adoptUnavailable',
         'That tab is no longer available to add.'
-      )
+      ),
+      tabId
     )
+    return
+  }
+  if (isWindowFull(state, windowId)) {
+    notifyWindow(windowId, windowFullMessage(), tabId)
     return
   }
   const terminalTab = findTerminalTabRow(state, tab)

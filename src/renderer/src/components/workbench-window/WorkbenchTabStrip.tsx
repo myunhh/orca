@@ -118,6 +118,7 @@ function WorkbenchTab({
 export function WorkbenchTabStrip({
   tabs,
   adoptableTabs,
+  adoptableTabsTruncated,
   activeTabId,
   splitEnabled,
   onActivate,
@@ -126,6 +127,7 @@ export function WorkbenchTabStrip({
 }: {
   tabs: readonly WorkbenchTabView[]
   adoptableTabs: readonly WorkbenchAdoptableTab[]
+  adoptableTabsTruncated: boolean
   activeTabId: string | null
   splitEnabled: boolean
   onActivate: (tabId: string) => void
@@ -178,6 +180,7 @@ export function WorkbenchTabStrip({
           </Tooltip>
           <WorkbenchAdoptTabButton
             adoptableTabs={adoptableTabs}
+            truncated={adoptableTabsTruncated}
             splitEnabled={splitEnabled}
             onAdopt={onAdopt}
           />

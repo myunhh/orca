@@ -45,8 +45,11 @@ export type WorkbenchTabView = {
 /** A main-window tab a workbench window may pull in; the window has no store to list them itself. */
 export type WorkbenchAdoptableTab = {
   tabId: string
+  /** Groups the picker by workspace; labels alone repeat across repos. */
+  worktreeId: string
   label: string
   worktreeLabel: string
+  repoLabel: string | null
   kind: 'terminal' | 'editor'
   /** AgentDotState of the tab's live agent, if any. */
   agentState: string | null
@@ -60,6 +63,8 @@ export type WorkbenchSnapshot = {
   pendingTabCount: number
   /** Main-window tabs not shown in any workbench window. */
   adoptableTabs: WorkbenchAdoptableTab[]
+  /** More main-window tabs exist than `adoptableTabs` lists. */
+  adoptableTabsTruncated: boolean
   generatedAt: number
 }
 
@@ -86,7 +91,15 @@ export type WorkbenchEditorContent =
   | { requestId: string; tabId: string; status: 'error'; message: string }
 
 /** A command failure shown in the window that sent the command, not the main window behind it. */
-export type WorkbenchNotice = { kind: 'error'; message: string }
+export type WorkbenchNotice = {
+  kind: 'error'
+  message: string
+  /** The adoptTab command this notice rejects, so the window stops waiting for that tab. */
+  rejectedAdoptTabId?: string
+}
+
+/** A live workbench window; `ordinal` is fixed for its lifetime and shown in its title. */
+export type WorkbenchWindowEntry = { windowId: string; ordinal: number }
 
 export const WORKBENCH_MAX_TABS = 64
 export const WORKBENCH_MAX_PANES_PER_TAB = 32

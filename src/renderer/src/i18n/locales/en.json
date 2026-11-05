@@ -21275,14 +21275,16 @@
         "WorkbenchWindowRoot": {
           "title": "Orca",
           "loading": "Connecting to Orca…",
-          "empty": "No tabs in this window"
+          "empty": "No tabs in this window",
+          "windowName": "Window {{windowNumber}}"
         },
         "bridge": {
           "workbench": {
             "command": {
               "handler": {
                 "workspaceNotReady": "This workspace is not ready for a new terminal yet.",
-                "adoptUnavailable": "That tab is no longer available to add."
+                "adoptUnavailable": "That tab is no longer available to add.",
+                "windowFull": "This window cannot hold more tabs."
               }
             },
             "editor": {
@@ -21299,7 +21301,11 @@
           "tab": {
             "move": {
               "openFailed": "Could not open a new window",
-              "windowClosed": "That window is no longer open"
+              "windowClosed": "That window is no longer open",
+              "windowFull": "That window cannot hold more tabs"
+            },
+            "label": {
+              "floatingTerminal": "Floating terminal"
             }
           }
         },
@@ -21307,7 +21313,9 @@
           "addExisting": "Add Existing Tab…",
           "search": "Search main window tabs…",
           "splitHint": "The tab opens in the right half of the split.",
-          "empty": "No other tabs are open in the main window."
+          "empty": "No other tabs are open in the main window.",
+          "noMatches": "No matching tabs",
+          "truncated": "Only the first {{count}} tabs are listed."
         }
       }
     },

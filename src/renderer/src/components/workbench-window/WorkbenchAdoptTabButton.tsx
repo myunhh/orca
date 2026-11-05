@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { defaultFilter } from 'cmdk'
 import { ListPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,29 +16,45 @@ import { translate } from '@/i18n/i18n'
 import type { WorkbenchAdoptableTab } from '../../../../shared/workbench-window/workbench-window-types'
 import { WorkbenchTabIcon } from './WorkbenchTabIcon'
 
-type AdoptableGroup = { key: string; worktreeLabel: string; tabs: WorkbenchAdoptableTab[] }
+type AdoptableGroup = { worktreeId: string; heading: string; tabs: WorkbenchAdoptableTab[] }
 
-/** Consecutive runs: the main window lists tabs workspace by workspace, and labels can repeat across repos. */
+// Worktree names like "main" repeat across repos; the repo tells them apart.
+function workspaceHeading(tab: WorkbenchAdoptableTab): string {
+  return tab.repoLabel ? `${tab.repoLabel} / ${tab.worktreeLabel}` : tab.worktreeLabel
+}
+
+/** One group per workspace, in the order the main window lists them. */
 function groupByWorkspace(adoptableTabs: readonly WorkbenchAdoptableTab[]): AdoptableGroup[] {
-  const groups: AdoptableGroup[] = []
+  const groups = new Map<string, AdoptableGroup>()
   for (const tab of adoptableTabs) {
-    const last = groups.at(-1)
-    if (last && last.worktreeLabel === tab.worktreeLabel) {
-      last.tabs.push(tab)
+    const group = groups.get(tab.worktreeId)
+    if (group) {
+      group.tabs.push(tab)
     } else {
-      groups.push({ key: tab.tabId, worktreeLabel: tab.worktreeLabel, tabs: [tab] })
+      groups.set(tab.worktreeId, {
+        worktreeId: tab.worktreeId,
+        heading: workspaceHeading(tab),
+        tabs: [tab]
+      })
     }
   }
-  return groups
+  return [...groups.values()]
+}
+
+// Item values are tab ids for identity; score only what the user can read.
+function filterByVisibleText(_value: string, search: string, keywords?: string[]): number {
+  return defaultFilter('', search, keywords)
 }
 
 /** Pull a tab that is open in the main window into this one, e.g. a second running agent. */
 export function WorkbenchAdoptTabButton({
   adoptableTabs,
+  truncated,
   splitEnabled,
   onAdopt
 }: {
   adoptableTabs: readonly WorkbenchAdoptableTab[]
+  truncated: boolean
   splitEnabled: boolean
   onAdopt: (tabId: string) => void
 }): React.JSX.Element {
@@ -62,7 +79,7 @@ export function WorkbenchAdoptTabButton({
         </TooltipContent>
       </Tooltip>
       <PopoverContent align="start" wheelScroll className="w-[min(20rem,calc(100vw-1rem))]">
-        <Command density="menu" label={label}>
+        <Command density="menu" label={label} filter={filterByVisibleText}>
           <CommandInput
             placeholder={translate(
               'components.workbench.window.WorkbenchAdoptTabButton.search',
@@ -79,18 +96,23 @@ export function WorkbenchAdoptTabButton({
           ) : null}
           <CommandList className="max-h-72">
             <CommandEmpty>
-              {translate(
-                'components.workbench.window.WorkbenchAdoptTabButton.empty',
-                'No other tabs are open in the main window.'
-              )}
+              {adoptableTabs.length === 0
+                ? translate(
+                    'components.workbench.window.WorkbenchAdoptTabButton.empty',
+                    'No other tabs are open in the main window.'
+                  )
+                : translate(
+                    'components.workbench.window.WorkbenchAdoptTabButton.noMatches',
+                    'No matching tabs'
+                  )}
             </CommandEmpty>
             {groups.map((group) => (
-              <CommandGroup key={group.key} heading={group.worktreeLabel}>
+              <CommandGroup key={group.worktreeId} heading={group.heading}>
                 {group.tabs.map((tab) => (
                   <CommandItem
                     key={tab.tabId}
                     value={tab.tabId}
-                    keywords={[tab.label, tab.worktreeLabel]}
+                    keywords={[tab.label, tab.worktreeLabel, tab.repoLabel ?? '']}
                     selection="palette"
                     onSelect={() => {
                       setOpen(false)
@@ -108,6 +130,15 @@ export function WorkbenchAdoptTabButton({
               </CommandGroup>
             ))}
           </CommandList>
+          {truncated ? (
+            <div className="border-t border-border px-3 py-1.5 text-2xs text-muted-foreground">
+              {translate(
+                'components.workbench.window.WorkbenchAdoptTabButton.truncated',
+                'Only the first {{count}} tabs are listed.',
+                { count: adoptableTabs.length }
+              )}
+            </div>
+          ) : null}
         </Command>
       </PopoverContent>
     </Popover>
