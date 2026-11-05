@@ -11,7 +11,8 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
-import { findUnifiedTab } from '../workbench-tab-eligibility'
+import { canShowTabInWorkbenchWindow, findUnifiedTab } from '../workbench-tab-eligibility'
+import { findTerminalTabRow } from '../workbench-tab-label'
 import { assignTabsToWorkbenchWindow } from '../workbench-tab-move'
 import { readWorkbenchEditorContent } from './workbench-editor-content-read'
 
@@ -139,6 +140,41 @@ async function createTerminalForWindow(worktreeId: string, windowId: string): Pr
   }
 }
 
+function notifyWindow(windowId: string, message: string): void {
+  const api = window.api.workbenchWindows
+  if (api) {
+    void api.publishNotice(windowId, { kind: 'error', message })
+  } else {
+    toast.error(message)
+  }
+}
+
+/** Pull a main-window tab into the window; the same successor selection as Move to New Window. */
+function adoptTabIntoWindow(tabId: string, windowId: string): void {
+  const state = useAppStore.getState()
+  const tab = findUnifiedTab(state, tabId)
+  if (
+    !tab ||
+    state.detachedWindowIdByTabId[tabId] !== undefined ||
+    !canShowTabInWorkbenchWindow(state, tabId)
+  ) {
+    notifyWindow(
+      windowId,
+      translate(
+        'components.workbench.window.bridge.workbench.command.handler.adoptUnavailable',
+        'That tab is no longer available to add.'
+      )
+    )
+    return
+  }
+  const terminalTab = findTerminalTabRow(state, tab)
+  // A terminal in a workspace the main window never showed has no PTY yet; mount just that pane.
+  if (terminalTab && (state.ptyIdsByTabId?.[terminalTab.id] ?? []).length === 0) {
+    requestBackgroundTerminalWorktreeMount({ worktreeId: tab.worktreeId, tabIds: [terminalTab.id] })
+  }
+  assignTabsToWorkbenchWindow([tabId], windowId)
+}
+
 function revealTabInMainWindow(tabId: string): void {
   const state = useAppStore.getState()
   const tab = findUnifiedTab(state, tabId)
@@ -157,14 +193,12 @@ export function handleWorkbenchCommand({ windowId, command }: WorkbenchRelayedCo
   const state = useAppStore.getState()
   if (command.kind === 'newTerminal') {
     void createTerminalForWindow(command.worktreeId, windowId).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error)
-      const api = window.api.workbenchWindows
-      if (api) {
-        void api.publishNotice(windowId, { kind: 'error', message })
-      } else {
-        toast.error(message)
-      }
+      notifyWindow(windowId, error instanceof Error ? error.message : String(error))
     })
+    return
+  }
+  if (command.kind === 'adoptTab') {
+    adoptTabIntoWindow(command.tabId, windowId)
     return
   }
   if (state.detachedWindowIdByTabId[command.tabId] !== windowId) {

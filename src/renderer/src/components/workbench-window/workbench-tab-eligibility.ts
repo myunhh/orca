@@ -24,18 +24,8 @@ export function findUnifiedTab(state: EligibilityState, unifiedTabId: string): T
   return null
 }
 
-/** Paired web clients cannot open native windows; only terminals and viewable files can move. */
-export function canShowTabInWorkbenchWindow(
-  state: EligibilityState,
-  unifiedTabId: string
-): boolean {
-  if (isPairedWebClientWindow() || !window.api.workbenchWindows) {
-    return false
-  }
-  const tab = findUnifiedTab(state, unifiedTabId)
-  if (!tab) {
-    return false
-  }
+/** Only terminals and viewable files can show in a workbench window. */
+export function isWorkbenchEligibleTab(state: Pick<AppState, 'openFiles'>, tab: Tab): boolean {
   if (tab.contentType === 'terminal') {
     return true
   }
@@ -44,4 +34,16 @@ export function canShowTabInWorkbenchWindow(
   }
   const file = state.openFiles.find((candidate) => candidate.id === tab.entityId)
   return file ? isWorkbenchViewableFile(file) : false
+}
+
+/** Paired web clients cannot open native windows. */
+export function canShowTabInWorkbenchWindow(
+  state: EligibilityState,
+  unifiedTabId: string
+): boolean {
+  if (isPairedWebClientWindow() || !window.api.workbenchWindows) {
+    return false
+  }
+  const tab = findUnifiedTab(state, unifiedTabId)
+  return tab ? isWorkbenchEligibleTab(state, tab) : false
 }

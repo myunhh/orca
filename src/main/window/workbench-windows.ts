@@ -52,6 +52,10 @@ export function listWorkbenchWindows(): BrowserWindow[] {
   return [...windowsById.values()].filter(isLive)
 }
 
+export function listWorkbenchWindowIds(): string[] {
+  return [...windowsById.keys()].filter((windowId) => getWorkbenchWindow(windowId) !== null)
+}
+
 /** Subscribe to workbench window closes in the main process. */
 export function onWorkbenchWindowClosed(listener: (windowId: string) => void): () => void {
   closedListeners.add(listener)

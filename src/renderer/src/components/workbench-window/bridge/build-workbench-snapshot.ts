@@ -5,6 +5,7 @@ import type {
   TerminalTab
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type {
+  WorkbenchAdoptableTab,
   WorkbenchEditorTabView,
   WorkbenchSnapshot,
   WorkbenchTabView,
@@ -23,14 +24,16 @@ import { isImageDropPath } from '../../../../../shared/image-path-paste'
 import { getNotificationWorkspaceLabels } from '@/components/terminal-pane/terminal-notification-state'
 import { resolveDashboardCardTerminalInput } from '@/components/dashboard/dashboard-card-terminal-input'
 import { readDashboardClientHost } from '@/components/dashboard/dashboard-client-host'
-import {
-  resolveTerminalTabActivityStatus,
-  terminalTabActivityToAgentDotState
-} from '@/components/tab-bar/terminal-tab-activity-status'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { findUnifiedTab, isWorkbenchViewableFile } from '../workbench-tab-eligibility'
+import {
+  findTerminalTabRow,
+  workbenchTerminalAgentState,
+  workbenchTerminalTabLabel
+} from '../workbench-tab-label'
+import { buildWorkbenchAdoptableTabs } from './build-workbench-adoptable-tabs'
 
 const SINGLE_PANE_LEAF_ID = 'pane'
 
@@ -110,7 +113,6 @@ function buildTabView(state: AppState, unifiedTabId: string): WorkbenchTabView |
   if (!tab) {
     return null
   }
-  const generatedTitles = state.settings?.tabAutoGenerateTitle === true
   const common = {
     tabId: tab.id,
     worktreeId: tab.worktreeId,
@@ -118,35 +120,17 @@ function buildTabView(state: AppState, unifiedTabId: string): WorkbenchTabView |
     color: tab.color ?? null
   }
   if (tab.contentType === 'terminal') {
-    const terminalTab = (state.tabsByWorktree[tab.worktreeId] ?? []).find(
-      (candidate) => candidate.id === tab.entityId
-    )
+    const terminalTab = findTerminalTabRow(state, tab)
     if (!terminalTab) {
       return null
     }
     const worktreePath = findWorktreeById(selectWorktreesByRepo(state), tab.worktreeId)?.path ?? ''
-    const activity = resolveTerminalTabActivityStatus({
-      tab: terminalTab,
-      agentStatusByPaneKey: state.agentStatusByPaneKey,
-      agentStatusEpoch: state.agentStatusEpoch,
-      runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
-      ptyIdsByTabId: state.ptyIdsByTabId,
-      terminalLayout: state.terminalLayoutsByTabId?.[terminalTab.id]
-    })
     return {
       ...common,
-      label: resolveUnifiedTabLabel(
-        {
-          ...tab,
-          quickCommandLabel: tab.quickCommandLabel ?? terminalTab.quickCommandLabel,
-          generatedLabel: tab.generatedLabel ?? terminalTab.generatedTitle
-        },
-        generatedTitles,
-        terminalTab.customTitle ?? terminalTab.title
-      ),
+      label: workbenchTerminalTabLabel(state, tab, terminalTab),
       color: tab.color ?? terminalTab.color ?? null,
       kind: 'terminal',
-      agentState: terminalTabActivityToAgentDotState(activity),
+      agentState: workbenchTerminalAgentState(state, terminalTab),
       terminal: buildTerminalPanes(state, terminalTab, worktreePath),
       editor: null
     }
@@ -157,7 +141,11 @@ function buildTabView(state: AppState, unifiedTabId: string): WorkbenchTabView |
   }
   return {
     ...common,
-    label: resolveUnifiedTabLabel(tab, generatedTitles, editor.relativePath),
+    label: resolveUnifiedTabLabel(
+      tab,
+      state.settings?.tabAutoGenerateTitle === true,
+      editor.relativePath
+    ),
     kind: 'editor',
     agentState: null,
     terminal: null,
@@ -169,15 +157,18 @@ export type WorkbenchSnapshotBuild = {
   snapshotsByWindowId: Map<string, WorkbenchSnapshot>
   /** Detached ids whose tab closed; the caller forgets them. */
   staleTabIds: string[]
+  /** Shared by every window, including ones whose tabs all left. */
+  adoptableTabs: WorkbenchAdoptableTab[]
 }
 
 export function buildWorkbenchSnapshots(state: AppState, now: number): WorkbenchSnapshotBuild {
   const snapshotsByWindowId = new Map<string, WorkbenchSnapshot>()
   const staleTabIds: string[] = []
+  const adoptableTabs = buildWorkbenchAdoptableTabs(state)
   for (const [tabId, windowId] of Object.entries(state.detachedWindowIdByTabId)) {
     let snapshot = snapshotsByWindowId.get(windowId)
     if (!snapshot) {
-      snapshot = { tabs: [], pendingTabCount: 0, generatedAt: now }
+      snapshot = { tabs: [], pendingTabCount: 0, adoptableTabs, generatedAt: now }
       snapshotsByWindowId.set(windowId, snapshot)
     }
     if (!findUnifiedTab(state, tabId)) {
@@ -192,5 +183,5 @@ export function buildWorkbenchSnapshots(state: AppState, now: number): Workbench
       snapshot.tabs.push(view)
     }
   }
-  return { snapshotsByWindowId, staleTabIds }
+  return { snapshotsByWindowId, staleTabIds, adoptableTabs }
 }

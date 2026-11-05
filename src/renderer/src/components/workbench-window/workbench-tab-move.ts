@@ -89,3 +89,36 @@ export async function moveTabsToNewWorkbenchWindow(
     )
   }
 }
+
+/** Like Move to New Window, but into a window that is already open. */
+export async function moveTabsToExistingWorkbenchWindow(
+  unifiedTabIds: readonly string[],
+  windowId: string
+): Promise<void> {
+  const api = window.api.workbenchWindows
+  const movable = unifiedTabIds.filter((tabId) =>
+    canShowTabInWorkbenchWindow(useAppStore.getState(), tabId)
+  )
+  if (movable.length === 0 || !api) {
+    return
+  }
+  const openWindowIds = await api.listWindows().catch((): string[] => [])
+  // Re-read after the await: the tab may have closed or moved meanwhile.
+  const state = useAppStore.getState()
+  const stillMovable = movable.filter(
+    (tabId) =>
+      canShowTabInWorkbenchWindow(state, tabId) && state.detachedWindowIdByTabId[tabId] !== windowId
+  )
+  if (!openWindowIds.includes(windowId)) {
+    toast.error(
+      translate(
+        'components.workbench.window.workbench.tab.move.windowClosed',
+        'That window is no longer open'
+      )
+    )
+    return
+  }
+  if (stillMovable.length > 0) {
+    assignTabsToWorkbenchWindow(stillMovable, windowId)
+  }
+}

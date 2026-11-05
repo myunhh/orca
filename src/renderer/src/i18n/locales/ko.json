@@ -19421,6 +19421,12 @@
         },
         "MoveTabToNewWindowMenuItem": {
           "move": "새 창으로 이동"
+        },
+        "MoveTabToWorkbenchWindowSubmenu": {
+          "windowName": "창 {{windowNumber}}",
+          "oneTab": "탭 1개",
+          "tabCount": "탭 {{count}}개",
+          "moveTo": "다른 창으로 이동"
         }
       }
     },
@@ -19984,7 +19990,8 @@
           "workbench": {
             "command": {
               "handler": {
-                "workspaceNotReady": "이 워크스페이스는 아직 새 터미널을 열 준비가 되지 않았습니다."
+                "workspaceNotReady": "이 워크스페이스는 아직 새 터미널을 열 준비가 되지 않았습니다.",
+                "adoptUnavailable": "이 탭은 더 이상 추가할 수 없습니다."
               }
             },
             "editor": {
@@ -20000,9 +20007,16 @@
         "workbench": {
           "tab": {
             "move": {
-              "openFailed": "새 창을 열 수 없습니다"
+              "openFailed": "새 창을 열 수 없습니다",
+              "windowClosed": "해당 창이 더 이상 열려 있지 않습니다"
             }
           }
+        },
+        "WorkbenchAdoptTabButton": {
+          "addExisting": "기존 탭 추가…",
+          "search": "메인 창의 탭 검색…",
+          "splitHint": "탭이 분할 화면의 오른쪽 절반에 열립니다.",
+          "empty": "메인 창에 열려 있는 다른 탭이 없습니다."
         }
       }
     },

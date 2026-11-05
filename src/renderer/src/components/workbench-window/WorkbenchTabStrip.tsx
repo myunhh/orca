@@ -1,5 +1,4 @@
-import { AppWindow, Columns2, FileText, Image, Plus, SquareTerminal, Undo2, X } from 'lucide-react'
-import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
+import { AppWindow, Columns2, Plus, Undo2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -15,37 +14,13 @@ import {
 } from '@/components/tab-bar/drop-indicator'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { WorkbenchTabView } from '../../../../shared/workbench-window/workbench-window-types'
+import type {
+  WorkbenchAdoptableTab,
+  WorkbenchTabView
+} from '../../../../shared/workbench-window/workbench-window-types'
 import { sendWorkbenchCommand } from './workbench-window-commands'
-
-const AGENT_DOT_STATES: readonly AgentDotState[] = [
-  'working',
-  'monitoring',
-  'permission',
-  'failed',
-  'interrupted',
-  'unconfirmed',
-  'done'
-]
-
-function toAgentDotState(value: string | null): AgentDotState | null {
-  return AGENT_DOT_STATES.find((state) => state === value) ?? null
-}
-
-function TabLeadingIcon({ tab }: { tab: WorkbenchTabView }): React.JSX.Element {
-  const dotState = toAgentDotState(tab.agentState)
-  if (dotState) {
-    return <AgentStateDot state={dotState} size="md" title={null} />
-  }
-  if (tab.kind === 'terminal') {
-    return <SquareTerminal className="size-3.5 shrink-0" />
-  }
-  return tab.editor?.isImage ? (
-    <Image className="size-3.5 shrink-0" />
-  ) : (
-    <FileText className="size-3.5 shrink-0" />
-  )
-}
+import { WorkbenchTabIcon } from './WorkbenchTabIcon'
+import { WorkbenchAdoptTabButton } from './WorkbenchAdoptTabButton'
 
 function WorkbenchTab({
   tab,
@@ -86,7 +61,11 @@ function WorkbenchTab({
           }}
         >
           {isActive ? <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden /> : null}
-          <TabLeadingIcon tab={tab} />
+          <WorkbenchTabIcon
+            kind={tab.kind}
+            agentState={tab.agentState}
+            isImage={tab.editor?.isImage ?? false}
+          />
           <span className="min-w-0 truncate">{tab.label}</span>
           <Button
             variant="ghost"
@@ -138,15 +117,19 @@ function WorkbenchTab({
 
 export function WorkbenchTabStrip({
   tabs,
+  adoptableTabs,
   activeTabId,
   splitEnabled,
   onActivate,
+  onAdopt,
   onToggleSplit
 }: {
   tabs: readonly WorkbenchTabView[]
+  adoptableTabs: readonly WorkbenchAdoptableTab[]
   activeTabId: string | null
   splitEnabled: boolean
   onActivate: (tabId: string) => void
+  onAdopt: (tabId: string) => void
   onToggleSplit: () => void
 }): React.JSX.Element {
   const activeTab = tabs.find((tab) => tab.tabId === activeTabId) ?? tabs[0] ?? null
@@ -173,7 +156,7 @@ export function WorkbenchTabStrip({
             onActivate={onActivate}
           />
         ))}
-        <div className="flex shrink-0 items-center px-1">
+        <div className="flex shrink-0 items-center gap-0.5 px-1">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -193,6 +176,11 @@ export function WorkbenchTabStrip({
               {newTerminalLabel}
             </TooltipContent>
           </Tooltip>
+          <WorkbenchAdoptTabButton
+            adoptableTabs={adoptableTabs}
+            splitEnabled={splitEnabled}
+            onAdopt={onAdopt}
+          />
         </div>
       </div>
       <div className="flex shrink-0 items-center px-1.5">

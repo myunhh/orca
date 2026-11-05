@@ -12,12 +12,17 @@ import {
 import { useAppMenuPaste } from '@/hooks/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
 import { translate } from '@/i18n/i18n'
-import type { WorkbenchTabView } from '../../../../shared/workbench-window/workbench-window-types'
+import type {
+  WorkbenchAdoptableTab,
+  WorkbenchTabView
+} from '../../../../shared/workbench-window/workbench-window-types'
 import { WorkbenchTabStrip } from './WorkbenchTabStrip'
 import { WorkbenchTerminalBody } from './WorkbenchTerminalBody'
 import { WorkbenchEditorBody } from './WorkbenchEditorBody'
 import { WorkbenchPaneHeaderActions, type WorkbenchPaneSide } from './workbench-pane-header-actions'
 import { useWorkbenchWindowModel } from './use-workbench-window-model'
+
+const NO_ADOPTABLE_TABS: readonly WorkbenchAdoptableTab[] = []
 
 function WorkbenchTabBody({ tab }: { tab: WorkbenchTabView }): React.JSX.Element | null {
   if (tab.kind === 'terminal' && tab.terminal) {
@@ -136,9 +141,11 @@ export function WorkbenchWindowRoot(): React.JSX.Element {
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
         <WorkbenchTabStrip
           tabs={tabs}
+          adoptableTabs={model.snapshot?.adoptableTabs ?? NO_ADOPTABLE_TABS}
           activeTabId={activeTab?.tabId ?? null}
           splitEnabled={model.splitEnabled}
           onActivate={model.activate}
+          onAdopt={model.adopt}
           onToggleSplit={model.toggleSplit}
         />
         {body}

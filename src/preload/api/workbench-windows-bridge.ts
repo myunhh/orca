@@ -16,6 +16,7 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): () => vo
 
 export const workbenchWindowsApi = {
   open: (tabIds: string[]) => ipcRenderer.invoke('workbench:open', { tabIds }),
+  listWindows: () => ipcRenderer.invoke('workbench:listWindows'),
   publishSnapshot: (windowId: string, snapshot: WorkbenchSnapshot) =>
     ipcRenderer.invoke('workbench:publishSnapshot', { windowId, snapshot }),
   publishEditorContent: (windowId: string, content: WorkbenchEditorContent) =>

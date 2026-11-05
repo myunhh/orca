@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { canShowTabInWorkbenchWindow } from '../workbench-window/workbench-tab-eligibility'
 import { moveTabsToNewWorkbenchWindow } from '../workbench-window/workbench-tab-move'
+import { MoveTabToWorkbenchWindowSubmenu } from './MoveTabToWorkbenchWindowSubmenu'
 
 export function MoveTabToNewWindowMenuItem({
   unifiedTabId,
@@ -19,9 +20,12 @@ export function MoveTabToNewWindowMenuItem({
   }
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   return (
-    <Item onSelect={() => void moveTabsToNewWorkbenchWindow([unifiedTabId])}>
-      <AppWindow className="size-3.5 shrink-0" />
-      {translate('components.tab.bar.MoveTabToNewWindowMenuItem.move', 'Move to New Window')}
-    </Item>
+    <>
+      <Item onSelect={() => void moveTabsToNewWorkbenchWindow([unifiedTabId])}>
+        <AppWindow className="size-3.5 shrink-0" />
+        {translate('components.tab.bar.MoveTabToNewWindowMenuItem.move', 'Move to New Window')}
+      </Item>
+      <MoveTabToWorkbenchWindowSubmenu unifiedTabId={unifiedTabId} menuKind={menuKind} />
+    </>
   )
 }

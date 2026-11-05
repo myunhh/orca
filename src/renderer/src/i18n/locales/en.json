@@ -20640,6 +20640,12 @@
         },
         "MoveTabToNewWindowMenuItem": {
           "move": "Move to New Window"
+        },
+        "MoveTabToWorkbenchWindowSubmenu": {
+          "windowName": "Window {{windowNumber}}",
+          "oneTab": "1 tab",
+          "tabCount": "{{count}} tabs",
+          "moveTo": "Move to Window"
         }
       }
     },
@@ -21275,7 +21281,8 @@
           "workbench": {
             "command": {
               "handler": {
-                "workspaceNotReady": "This workspace is not ready for a new terminal yet."
+                "workspaceNotReady": "This workspace is not ready for a new terminal yet.",
+                "adoptUnavailable": "That tab is no longer available to add."
               }
             },
             "editor": {
@@ -21291,9 +21298,16 @@
         "workbench": {
           "tab": {
             "move": {
-              "openFailed": "Could not open a new window"
+              "openFailed": "Could not open a new window",
+              "windowClosed": "That window is no longer open"
             }
           }
+        },
+        "WorkbenchAdoptTabButton": {
+          "addExisting": "Add Existing Tab…",
+          "search": "Search main window tabs…",
+          "splitHint": "The tab opens in the right half of the split.",
+          "empty": "No other tabs are open in the main window."
         }
       }
     },

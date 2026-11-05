@@ -42,16 +42,30 @@ export type WorkbenchTabView = {
   editor: WorkbenchEditorTabView | null
 }
 
+/** A main-window tab a workbench window may pull in; the window has no store to list them itself. */
+export type WorkbenchAdoptableTab = {
+  tabId: string
+  label: string
+  worktreeLabel: string
+  kind: 'terminal' | 'editor'
+  /** AgentDotState of the tab's live agent, if any. */
+  agentState: string | null
+  isImage: boolean
+}
+
 /** Published by the main renderer; a workbench window renders exactly these tabs. */
 export type WorkbenchSnapshot = {
   tabs: WorkbenchTabView[]
   /** Assigned tabs whose view cannot be built yet; the window waits for them instead of closing. */
   pendingTabCount: number
+  /** Main-window tabs not shown in any workbench window. */
+  adoptableTabs: WorkbenchAdoptableTab[]
   generatedAt: number
 }
 
 export type WorkbenchCommand =
   | { kind: 'newTerminal'; worktreeId: string }
+  | { kind: 'adoptTab'; tabId: string }
   | { kind: 'returnTab'; tabId: string }
   | { kind: 'closeTab'; tabId: string }
   | { kind: 'revealInMain'; tabId: string }
@@ -76,5 +90,6 @@ export type WorkbenchNotice = { kind: 'error'; message: string }
 
 export const WORKBENCH_MAX_TABS = 64
 export const WORKBENCH_MAX_PANES_PER_TAB = 32
+export const WORKBENCH_MAX_ADOPTABLE_TABS = 200
 /** Base64 image or markdown text relayed between renderers; larger files stay in the main window. */
 export const WORKBENCH_MAX_EDITOR_CONTENT_CHARS = 32 * 1024 * 1024

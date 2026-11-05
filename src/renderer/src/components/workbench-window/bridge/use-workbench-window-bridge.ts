@@ -23,12 +23,13 @@ function workbenchInputsChanged(state: AppState, previous: AppState): boolean {
     state.agentStatusEpoch !== previous.agentStatusEpoch ||
     state.runtimePaneTitlesByTabId !== previous.runtimePaneTitlesByTabId ||
     state.paneForegroundAgentByPaneKey !== previous.paneForegroundAgentByPaneKey ||
+    state.groupsByWorktree !== previous.groupsByWorktree ||
     state.settings !== previous.settings
   )
 }
 
 function snapshotKey(snapshot: WorkbenchSnapshot): string {
-  return JSON.stringify([snapshot.tabs, snapshot.pendingTabCount])
+  return JSON.stringify([snapshot.tabs, snapshot.pendingTabCount, snapshot.adoptableTabs])
 }
 
 /** Publish per-window snapshots and run window commands; keep subscriptions out of the effect body for cleanup clarity. */
@@ -42,13 +43,17 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
     timer = null
     lastPublishAt = Date.now()
     const state = useAppStore.getState()
-    const { snapshotsByWindowId, staleTabIds } = buildWorkbenchSnapshots(state, lastPublishAt)
+    const { snapshotsByWindowId, staleTabIds, adoptableTabs } = buildWorkbenchSnapshots(
+      state,
+      lastPublishAt
+    )
     // Windows whose every tab left still need the empty view so they can close.
     for (const windowId of [...lastKeyByWindowId.keys(), ...requested]) {
       if (!snapshotsByWindowId.has(windowId)) {
         snapshotsByWindowId.set(windowId, {
           tabs: [],
           pendingTabCount: 0,
+          adoptableTabs,
           generatedAt: lastPublishAt
         })
       }

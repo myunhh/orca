@@ -1,4 +1,5 @@
 import type {
+  WorkbenchAdoptableTab,
   WorkbenchCommand,
   WorkbenchEditorContent,
   WorkbenchNotice,
@@ -7,6 +8,7 @@ import type {
   WorkbenchTerminalPane
 } from '../../shared/workbench-window/workbench-window-types'
 import {
+  WORKBENCH_MAX_ADOPTABLE_TABS,
   WORKBENCH_MAX_EDITOR_CONTENT_CHARS,
   WORKBENCH_MAX_PANES_PER_TAB,
   WORKBENCH_MAX_TABS
@@ -102,11 +104,31 @@ function isTabView(value: unknown): value is WorkbenchTabView {
   return value.kind === 'editor' && isEditorView(value.editor) && value.terminal === null
 }
 
+function isAdoptableTab(value: unknown): value is WorkbenchAdoptableTab {
+  return (
+    isRecord(value) &&
+    isId(value.tabId) &&
+    isText(value.label) &&
+    isText(value.worktreeLabel) &&
+    (value.kind === 'terminal' || value.kind === 'editor') &&
+    isNullableText(value.agentState, 64) &&
+    typeof value.isImage === 'boolean'
+  )
+}
+
 export function admitWorkbenchSnapshot(value: unknown): WorkbenchSnapshot | null {
   if (!isRecord(value) || typeof value.generatedAt !== 'number' || !Array.isArray(value.tabs)) {
     return null
   }
   if (value.tabs.length > WORKBENCH_MAX_TABS || !value.tabs.every(isTabView)) {
+    return null
+  }
+  const adoptableTabs = value.adoptableTabs
+  if (
+    !Array.isArray(adoptableTabs) ||
+    adoptableTabs.length > WORKBENCH_MAX_ADOPTABLE_TABS ||
+    !adoptableTabs.every(isAdoptableTab)
+  ) {
     return null
   }
   const pendingTabCount = value.pendingTabCount
@@ -117,7 +139,7 @@ export function admitWorkbenchSnapshot(value: unknown): WorkbenchSnapshot | null
   ) {
     return null
   }
-  return { tabs: value.tabs, pendingTabCount, generatedAt: value.generatedAt }
+  return { tabs: value.tabs, pendingTabCount, adoptableTabs, generatedAt: value.generatedAt }
 }
 
 export function admitWorkbenchCommand(value: unknown): WorkbenchCommand | null {
@@ -127,6 +149,7 @@ export function admitWorkbenchCommand(value: unknown): WorkbenchCommand | null {
   switch (value.kind) {
     case 'newTerminal':
       return isId(value.worktreeId) ? { kind: 'newTerminal', worktreeId: value.worktreeId } : null
+    case 'adoptTab':
     case 'returnTab':
     case 'closeTab':
     case 'revealInMain':

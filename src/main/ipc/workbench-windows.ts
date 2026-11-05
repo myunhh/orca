@@ -7,6 +7,7 @@ import {
   createWorkbenchWindow,
   getWorkbenchWindow,
   getWorkbenchWindowIdForSender,
+  listWorkbenchWindowIds,
   onWorkbenchWindowClosed
 } from '../window/workbench-windows'
 import { safelyRevealWindow } from '../window/focus-existing-window'
@@ -22,6 +23,7 @@ import {
 
 const CHANNELS = [
   'workbench:open',
+  'workbench:listWindows',
   'workbench:publishSnapshot',
   'workbench:requestSnapshot',
   'workbench:command',
@@ -80,6 +82,11 @@ export function registerWorkbenchWindowHandlers(
     })
     return { windowId }
   })
+
+  // Main's registry is the authority on which windows still exist; the renderer's map can lag a close.
+  ipcMain.handle('workbench:listWindows', (event): string[] =>
+    isTrustedUIRenderer(event.sender) ? listWorkbenchWindowIds() : []
+  )
 
   ipcMain.handle('workbench:publishSnapshot', (event, args: unknown): void => {
     const windowId = windowIdArg(args)
