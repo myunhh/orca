@@ -14,14 +14,12 @@ export function firstSelectableTargetKey(
   preferred?: TerminalContextSharePreferredTarget
 ): string | null {
   const selectable = targets.filter((target) => target.agentLabel !== null)
-  const match = preferred
-    ? selectable.find(
-        (target) =>
-          target.tabId === preferred.tabId &&
-          (preferred.leafId === null || target.leafId === preferred.leafId)
-      )
-    : undefined
-  return (match ?? selectable[0])?.key ?? null
+  if (!preferred) {
+    return selectable[0]?.key ?? null
+  }
+  const sameTab = selectable.filter((target) => target.tabId === preferred.tabId)
+  // A named partner that cannot be matched leaves the choice to the user, never an unrelated agent.
+  return (sameTab.find((target) => target.leafId === preferred.leafId) ?? sameTab[0])?.key ?? null
 }
 
 export function TerminalTargetSelect({

@@ -24071,6 +24071,10 @@
     "recoverableError": {
       "title": "This Orca window hit an error.",
       "description": "The window could not finish rendering. Retry to remount it, or close it to return its tabs."
+    },
+    "terminalContextShareError": {
+      "title": "The context sharing dialog hit an error.",
+      "description": "Retry to reopen it. Terminals in this window are unaffected."
     }
   }
 }

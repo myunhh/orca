@@ -67,7 +67,20 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
     <I18nProvider>
       <CompanionWindowSettingsSync />
       <WorkbenchRoot />
-      <TerminalContextShareHost />
+      <RecoverableRenderErrorBoundary
+        boundaryId="workbench-window.terminal-context-share"
+        surface="workbench-window"
+        title={translate(
+          'workbenchWindow.terminalContextShareError.title',
+          'The context sharing dialog hit an error.'
+        )}
+        description={translate(
+          'workbenchWindow.terminalContextShareError.description',
+          'Retry to reopen it. Terminals in this window are unaffected.'
+        )}
+      >
+        <TerminalContextShareHost />
+      </RecoverableRenderErrorBoundary>
       <Toaster />
     </I18nProvider>
   </StrictMode>
