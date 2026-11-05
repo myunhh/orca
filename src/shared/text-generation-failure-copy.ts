@@ -1,4 +1,5 @@
 import { AGENT_OUTPUT_FAILURE_COPY } from './agent-output-failure-copy'
+import { TERMINAL_CONTEXT_SUMMARY_FAILURE_COPY } from './terminal-context-share/terminal-context-summary-failure-copy'
 
 // One English table for AI text-generation failures: main builds the wire `error`, the renderer translates by code.
 export const TEXT_GENERATION_FAILURE_COPY = {
@@ -62,7 +63,8 @@ export const TEXT_GENERATION_FAILURE_COPY = {
   planModelUnavailable: 'Model "{{model}}" is not available for {{label}}.',
   planModelWithoutThinking: 'Model "{{model}}" does not support a thinking effort level.',
   planThinkingLevelInvalid: 'Thinking level "{{level}}" is not valid for {{model}}.',
-  ...AGENT_OUTPUT_FAILURE_COPY
+  ...AGENT_OUTPUT_FAILURE_COPY,
+  ...TERMINAL_CONTEXT_SUMMARY_FAILURE_COPY
 } as const
 
 export type TextGenerationFailureCode = keyof typeof TEXT_GENERATION_FAILURE_COPY

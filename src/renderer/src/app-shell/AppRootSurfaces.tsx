@@ -18,6 +18,7 @@ import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
+import { TerminalContextShareHost } from '../components/terminal-context-share/TerminalContextShareHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
@@ -216,6 +217,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         ) : null}
         {/* Own store, not activeModal: another modal must never evict a running move. */}
         <WslMoveDialogHost />
+        <TerminalContextShareHost />
         {/* Opened by toast, SSH host row and terminal pane. */}
         {activeModal === 'node-dist-mirror' ? (
           <ModalBoundary boundaryId="modal.node-dist-mirror" resetKey>

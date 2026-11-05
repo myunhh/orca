@@ -436,6 +436,10 @@ vi.mock('../jira/issue-summary-generation', () => ({
   registerJiraIssueSummaryGenerationHandlers: registerJiraIssueSummaryGenerationHandlersMock
 }))
 
+vi.mock('../terminal-context-share-handlers', () => ({
+  registerTerminalContextShareHandlers: vi.fn()
+}))
+
 vi.mock('../source-control/bitbucket', () => ({
   registerBitbucketHandlers: registerBitbucketHandlersMock
 }))

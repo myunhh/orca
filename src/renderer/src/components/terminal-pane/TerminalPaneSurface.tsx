@@ -33,6 +33,7 @@ import { useAppStore } from '@/store'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useWslHostStartCardReplacesPaneError } from './use-wsl-host-stopped-pane'
+import { openMenuPaneContextShare } from './terminal-pane-menu-context-share'
 
 export function TerminalPaneSurface({
   controller
@@ -296,6 +297,7 @@ export function TerminalPaneSurface({
         isNativeChatView={contextMenuIsChatView}
         onToggleNativeChat={handleContextMenuToggleNativeChat}
         onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
+        onOpenTerminalContextShare={(kind) => openMenuPaneContextShare(kind, controller)}
         quickCommandHosts={visibleQuickCommandHosts}
         quickCommandHostLoadFailed={quickCommandHostLoadFailed}
         quickCommandHostOwnershipPending={quickCommandHostOwnershipPending}

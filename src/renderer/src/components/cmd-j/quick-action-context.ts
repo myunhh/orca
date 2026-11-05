@@ -19,6 +19,7 @@ export type CmdJUnavailableReason =
   | 'ssh-disconnected'
   | 'no-active-group'
   | 'no-active-chat'
+  | 'no-active-terminal'
   | 'client-action-unsupported'
 
 export type CmdJQuickActionAvailability =
@@ -242,6 +243,12 @@ export function getUnavailableQuickActionMessage(
       return translate(
         'auto.components.cmdJ.quickActionUnavailable.noMovableChat',
         'Can’t run “{{action}}” — no movable chat is active.',
+        options
+      )
+    case 'no-active-terminal':
+      return translate(
+        'components.cmdJ.quickActionUnavailable.noActiveTerminal',
+        'Can’t run “{{action}}” — no terminal is active.',
         options
       )
     case 'client-action-unsupported':

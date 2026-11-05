@@ -77,7 +77,8 @@ export function userFacingUnsafeWindowsBatchArgs(label: string): TextGenerationF
 const EMPTY_RESULT_FAILURES = {
   'commit-message': ['emptyCommitMessage', 'emptyCommitMessageWithDetail'],
   'pull-request-fields': ['emptyPullRequestDetails', 'emptyPullRequestDetailsWithDetail'],
-  'jira-issue-summary': ['emptyJiraSummary', 'emptyJiraSummaryWithDetail']
+  'jira-issue-summary': ['emptyJiraSummary', 'emptyJiraSummaryWithDetail'],
+  'terminal-context-summary': ['emptyJiraSummary', 'emptyJiraSummaryWithDetail']
 } as const
 
 const UNCODED_EMPTY_RESULT_NAMES = {

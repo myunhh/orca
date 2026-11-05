@@ -18,6 +18,7 @@ import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 import { ShowAgentGraphMenuItem } from '../agent-graph/ShowAgentGraphMenuItem'
 import { tabAgentGraphPaneKey } from '../agent-graph/agent-graph-pane-options'
+import { TabTerminalContextShareMenuItems } from '../terminal-context-share/TabTerminalContextShareMenuItems'
 
 const TAB_COLORS = [
   {
@@ -214,6 +215,7 @@ export function SortableTabContextMenu({
         <ShowAgentGraphMenuItem menuKind="context" paneKey={() => agentGraphPaneKey} />
       ) : null}
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
+      <TabTerminalContextShareMenuItems tabId={tab.id} worktreeId={tab.worktreeId} />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
         <X className="size-3.5" />

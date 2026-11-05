@@ -21343,6 +21343,67 @@
       "agentGraph": {
         "title": "Agent Graph"
       }
+    },
+    "cmdJ": {
+      "quickActionUnavailable": {
+        "noActiveTerminal": "Can’t run “{{action}}” — no terminal is active."
+      },
+      "terminalContextShare": {
+        "shareTitle": "Share Terminal Context",
+        "shareDescription": "Summarize the active terminal and send it to another agent.",
+        "verbs": {
+          "shareContext": "share context",
+          "handOff": "hand off context",
+          "summarize": "summarize terminal",
+          "linkTerminals": "link terminals",
+          "pairAgents": "pair agents"
+        },
+        "linkTitle": "Link Terminals",
+        "linkDescription": "Let the active agent and another agent read and control each other’s terminal."
+      }
+    },
+    "terminalContextShare": {
+      "linkTitle": "Link Terminals",
+      "linkDescription": "Tell the agents in “{{source}}” and a partner terminal how to read and type into each other’s terminal with the orca CLI.",
+      "linked": "Linked “{{source}}” with “{{target}}”.",
+      "linkPartial": "Not every agent received its note: {{reason}}",
+      "partnerLabel": "Partner terminal",
+      "linkPreviewLabel": "Note sent to each agent",
+      "linkWarning": "Both agents will be able to read and type into each other’s terminal. Only link agents you trust to act on each other’s output.",
+      "cancel": "Cancel",
+      "linkSubmit": "Send Link Notes",
+      "stageReading": "Reading terminal…",
+      "stageSummarizing": "Summarizing…",
+      "stageSending": "Sending…",
+      "shareTitle": "Share Terminal Context",
+      "shareDescription": "Send what “{{source}}” is working on to another terminal’s agent. Review the text before it is sent.",
+      "sent": "Context sent to “{{target}}”.",
+      "targetLabel": "Send to",
+      "contentLabel": "Content",
+      "modeSummary": "Summarize with model",
+      "modeRaw": "Send raw screen",
+      "modelLabel": "Summary model",
+      "modelHint": "Runs headlessly with your local Claude or Codex CLI login.",
+      "instructionLabel": "Focus (optional)",
+      "instructionPlaceholder": "e.g. the failing test and what was already tried",
+      "generate": "Generate Preview",
+      "regenerate": "Regenerate",
+      "stop": "Stop",
+      "previewLabel": "Message to send",
+      "send": "Send to Agent",
+      "loadingTerminals": "Finding terminals…",
+      "sourceUnavailable": "This terminal is not available to Orca right now.",
+      "targetsUnavailable": "Could not list terminals. Try again in a moment.",
+      "noTargets": "Open another terminal to share with first.",
+      "menuShare": "Share Context to Terminal…",
+      "menuLink": "Link with Terminal…",
+      "targetPlaceholder": "Choose a terminal",
+      "noOutput": "The source terminal has no output to share yet.",
+      "summaryUnavailable": "Summaries run on the Orca desktop app. Send the raw screen instead.",
+      "readFailed": "Could not read the source terminal.",
+      "readHintNote": "Orca appends this line for the receiving agent: {{line}}",
+      "targetNoAgent": "No agent",
+      "summaryFailed": "Could not summarize the source terminal."
     }
   },
   "dashboardPopout": {
@@ -21733,7 +21794,10 @@
         "kimiProviderLimited": "Kimi reached a provider limit or the provider is busy. Wait before retrying or reduce request frequency.",
         "kimiContextOverflow": "Kimi ran out of context. Shorten the prompt or start a new session, then retry.",
         "kimiConfigInvalid": "Kimi has invalid configuration. Check the model and provider configuration on the execution host before retrying.",
-        "kimiContinueSessionConflict": "Kimi received conflicting options: --continue, --session. Correct the generation recipe or CLI arguments before retrying."
+        "kimiContinueSessionConflict": "Kimi received conflicting options: --continue, --session. Correct the generation recipe or CLI arguments before retrying.",
+        "terminalContextEmpty": "No terminal output to summarize.",
+        "terminalContextSummaryEmpty": "The generated summary was empty.",
+        "terminalContextSummaryBusy": "Another terminal context summary is already running."
       },
       "enableSourceControlAi": "Enable Source Control AI in Settings -> Git.",
       "chooseBaseBranch": "Choose a base branch before generating.",
