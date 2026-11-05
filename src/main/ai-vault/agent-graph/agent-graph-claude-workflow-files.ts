@@ -83,7 +83,8 @@ export async function readClaudeWorkflowRecord(path: string): Promise<ClaudeWork
     if (fileStat.size > WORKFLOW_RECORD_MAX_BYTES) {
       return null
     }
-    const record = asRecord(JSON.parse(await wslGatedReadFile(path, 'utf-8', 'scan')) as unknown)
+    const parsed: unknown = JSON.parse(await wslGatedReadFile(path, 'utf-8', 'scan'))
+    const record = asRecord(parsed)
     if (!record) {
       return null
     }

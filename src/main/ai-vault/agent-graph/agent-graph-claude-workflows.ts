@@ -47,10 +47,7 @@ export async function addClaudeWorkflowNodes(
   let runIds: string[]
   try {
     const entries = await wslGatedReaddir(claudeWorkflowsDirFor(args.parentPath), 'scan')
-    runIds = entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort()
+    runIds = entries.flatMap((entry) => (entry.isDirectory() ? [entry.name] : [])).sort()
   } catch {
     return
   }

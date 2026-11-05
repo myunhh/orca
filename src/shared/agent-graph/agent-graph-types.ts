@@ -36,6 +36,7 @@ export type AgentGraphEdge = {
 }
 
 export type AgentGraphMessage = {
+  id: string
   role: 'user' | 'assistant' | 'tool'
   text: string
   at: string | null

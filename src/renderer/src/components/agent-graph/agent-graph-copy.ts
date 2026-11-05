@@ -42,7 +42,7 @@ export function agentGraphStatusDotState(
       return 'failed'
     case 'stopped':
       return 'interrupted'
-    default:
+    case null:
       return null
   }
 }

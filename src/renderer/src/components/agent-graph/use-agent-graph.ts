@@ -34,8 +34,13 @@ export function useAgentGraph(args: {
       return
     }
     let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
+    let inFlight = false
     const load = async (): Promise<void> => {
+      // A slow build must not stack polls behind it.
+      if (inFlight) {
+        return
+      }
+      inFlight = true
       setLoading(true)
       try {
         const fallback = fallbackRef.current
@@ -58,19 +63,18 @@ export function useAgentGraph(args: {
           })
         }
       } finally {
+        inFlight = false
         if (!cancelled) {
           setLoading(false)
-          timer = setTimeout(() => void load(), AUTO_REFRESH_MS)
         }
       }
     }
     void load()
+    const interval = setInterval(() => void load(), AUTO_REFRESH_MS)
     return () => {
       cancelled = true
+      clearInterval(interval)
       setLoading(false)
-      if (timer) {
-        clearTimeout(timer)
-      }
     }
   }, [paneKey, isVisible, refreshToken])
 

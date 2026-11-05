@@ -105,23 +105,22 @@ function toAgentGraphMessage(message: NativeChatMessage): AgentGraphMessage | nu
       role === 'assistant' && message.blocks.every((block) => block.type !== 'text')
         ? 'tool'
         : role,
+    id: message.id,
     text,
     at: message.timestamp === null ? null : new Date(message.timestamp).toISOString(),
     ...(message.model ? { model: message.model } : {})
   }
 }
 
+// Images and subagent/background-task blocks carry no text worth flattening here.
 function blockText(block: NativeChatBlock): string {
-  switch (block.type) {
-    case 'text':
-      return block.text
-    case 'tool-call':
-      return `→ ${block.name} ${previewToolInput(block.input)}`.trim()
-    case 'tool-result':
-      return `← ${block.output}`
-    default:
-      return ''
+  if (block.type === 'text') {
+    return block.text
   }
+  if (block.type === 'tool-call') {
+    return `→ ${block.name} ${previewToolInput(block.input)}`.trim()
+  }
+  return block.type === 'tool-result' ? `← ${block.output}` : ''
 }
 
 function previewToolInput(input: unknown): string {

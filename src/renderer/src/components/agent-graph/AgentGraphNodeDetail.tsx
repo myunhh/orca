@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/agent-graph/agent-graph-types'
 import { formatSubagentTokens } from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { agentGraphEdgeKindLabel, agentGraphMessageRoleLabel } from './agent-graph-copy'
 import { agentGraphNodeEdges } from './agent-graph-layout'
 
@@ -164,8 +164,8 @@ function TranscriptSection({
           )}
         </p>
       ) : null}
-      {result.messages.map((message, index) => (
-        <MessageRow key={`${message.at ?? ''}:${index}`} message={message} />
+      {result.messages.map((message) => (
+        <MessageRow key={message.id} message={message} />
       ))}
     </section>
   )
@@ -179,7 +179,9 @@ function MessageRow({ message }: { message: AgentGraphMessage }): React.JSX.Elem
           {agentGraphMessageRoleLabel(message.role)}
         </span>
         {message.model ? <span className="font-mono">{message.model}</span> : null}
-        {message.at ? <span>{new Date(message.at).toLocaleTimeString()}</span> : null}
+        {message.at ? (
+          <span>{new Date(message.at).toLocaleTimeString(getIntlLocale())}</span>
+        ) : null}
       </div>
       <p className="mt-0.5 line-clamp-6 whitespace-pre-wrap break-words text-xs text-foreground">
         {message.text}
