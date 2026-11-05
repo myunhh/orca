@@ -39,9 +39,7 @@ import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications'
 import { registerNotebookHandlers } from '../notebook'
 import { registerOnboardingHandlers } from '../onboarding'
-import { registerDashboardPopoutHandlers } from '../dashboard-popout'
-import { registerWorkspaceSpaceWindowHandlers } from '../workspace-space/workspace-space-window'
-import { registerTerminalPreviewHandlers } from '../terminal-preview'
+import { registerCompanionWindowHandlers } from '../companion-window-handlers'
 import { registerDeveloperPermissionHandlers } from '../developer-permissions'
 import { registerComputerUsePermissionHandlers } from '../computer-use-permissions'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
@@ -84,7 +82,7 @@ import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from '../../window/clipboard-ipc-handlers'
-import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
+import { isCompanionWindowRenderer } from '../../window/companion-window-renderers'
 import type { ClaudeUsageStore } from '../../claude-usage/store'
 import type { CodexUsageStore } from '../../codex-usage/store'
 import type { OpenCodeUsageStore } from '../../opencode-usage/store'
@@ -216,9 +214,7 @@ export function registerCoreHandlers(
   registerNotificationHandlers(store, runtime)
   registerNotebookHandlers(store)
   registerOnboardingHandlers(store)
-  registerDashboardPopoutHandlers(store, keybindings)
-  registerWorkspaceSpaceWindowHandlers(store)
-  registerTerminalPreviewHandlers(runtime)
+  registerCompanionWindowHandlers(store, runtime, keybindings)
   registerDeveloperPermissionHandlers()
   // Diagnostics and telemetry register independent channels and keep separate data paths.
   registerDiagnosticsHandlers()
@@ -249,7 +245,7 @@ export function registerCoreHandlers(
   registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store, runtime)
-  registerUIHandlers(store, { isDashboardPopoutRenderer })
+  registerUIHandlers(store, { isCompanionWindowRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers()
   registerEmulatorScrcpyTouchHandler()

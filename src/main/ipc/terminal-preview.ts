@@ -4,7 +4,7 @@ import type {
   TerminalPreviewSnapshot
 } from '../../shared/terminal/replay/terminal-preview'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
+import { isCompanionWindowRenderer } from '../window/companion-window-renderers'
 import { isTrustedUIRenderer } from './ui'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import {
@@ -18,9 +18,9 @@ function isValidPtyId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= PREVIEW_ID_MAX_LENGTH
 }
 
-// Both popout and main-renderer overlay host previews; trusted UI already has ordinary PTY access.
+// Companion windows and main-renderer overlays host previews; trusted UI already has ordinary PTY access.
 function isTerminalPreviewRenderer(sender: WebContents): boolean {
-  return isDashboardPopoutRenderer(sender) || isTrustedUIRenderer(sender)
+  return isCompanionWindowRenderer(sender) || isTrustedUIRenderer(sender)
 }
 /** Pop-out terminal transport with an atomic snapshot/live boundary. */
 export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): void {
@@ -35,7 +35,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
   const fitClaimsByContents = new Map<number, Map<string, symbol>>()
   const rendererLifetimes = new Map<number, ReturnType<typeof abortWhenRendererGone>>()
 
-  const previewViewerKey = (contentsId: number): string => `dashboard-popout:${contentsId}`
+  const previewViewerKey = (contentsId: number): string => `terminal-preview:${contentsId}`
 
   const releaseFitClaim = (contentsId: number, ptyId: string): void => {
     const claimed = fitClaimsByContents.get(contentsId)

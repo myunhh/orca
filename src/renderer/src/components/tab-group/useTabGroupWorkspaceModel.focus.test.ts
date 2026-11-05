@@ -161,6 +161,7 @@ function resetStore(): void {
     settings: { activeRuntimeEnvironmentId: null },
     tabsByWorktree: { 'wt-1': [terminalTab] },
     terminalLayoutsByTabId: {},
+    detachedWindowIdByTabId: {},
     unifiedTabsByWorktree: { 'wt-1': [unifiedTab] },
     activateTab: mocks.activateTab,
     closeBrowserTab: mocks.closeBrowserTab,

@@ -71,6 +71,7 @@ import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cle
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
 import type { LinkPreviewApi } from './api/link-preview-api'
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
+import type { WorkbenchWindowsApi } from './api/workbench-windows-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
 // Flattens contracts that share one PreloadApi key: an intersection is not type-identical to the flat shape.
@@ -89,6 +90,8 @@ export type PreloadApi = {
   worktrees: WorktreeApi
   workspaceCleanup: WorkspaceCleanupApi
   workspaceSpace: WorkspaceSpaceApi
+  /** Desktop only: detached workbench windows. */
+  workbenchWindows?: WorkbenchWindowsApi
   workspacePorts: WorkspacePortsApi
   linkPreview: LinkPreviewApi
   pty: PtyApi

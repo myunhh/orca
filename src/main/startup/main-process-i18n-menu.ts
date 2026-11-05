@@ -7,6 +7,7 @@ import {
 } from '../menu/register-app-menu'
 import { zoomDashboardPopoutIfFocused } from '../window/dashboard-popout-window'
 import { zoomWorkspaceSpaceWindowIfFocused } from '../window/workspace-space-window'
+import { zoomWorkbenchWindowIfFocused } from '../window/workbench-windows'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { mainProcessState as state } from './main-process-state'
 import {
@@ -20,6 +21,15 @@ import {
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
 import { browserManager } from '../browser/browser-manager'
+
+// Zoom the focused companion rather than changing the main window behind it.
+function zoomCompanionWindowIfFocused(direction: 'in' | 'out' | 'reset'): boolean {
+  return (
+    zoomDashboardPopoutIfFocused(direction) ||
+    zoomWorkspaceSpaceWindowIfFocused(direction) ||
+    zoomWorkbenchWindowIfFocused(direction)
+  )
+}
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store
@@ -58,17 +68,17 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     },
     // Zoom the focused popout rather than changing the main window behind it.
     onZoomIn: () => {
-      if (!zoomDashboardPopoutIfFocused('in') && !zoomWorkspaceSpaceWindowIfFocused('in')) {
+      if (!zoomCompanionWindowIfFocused('in')) {
         state.mainWindow?.webContents.send('terminal:zoom', 'in')
       }
     },
     onZoomOut: () => {
-      if (!zoomDashboardPopoutIfFocused('out') && !zoomWorkspaceSpaceWindowIfFocused('out')) {
+      if (!zoomCompanionWindowIfFocused('out')) {
         state.mainWindow?.webContents.send('terminal:zoom', 'out')
       }
     },
     onZoomReset: () => {
-      if (!zoomDashboardPopoutIfFocused('reset') && !zoomWorkspaceSpaceWindowIfFocused('reset')) {
+      if (!zoomCompanionWindowIfFocused('reset')) {
         state.mainWindow?.webContents.send('terminal:zoom', 'reset')
       }
     },

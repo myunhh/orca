@@ -21,6 +21,7 @@ import { sparsePresetsApi } from './api/sparse-presets-bridge'
 import { worktreesApi } from './api/worktrees-bridge'
 import { workspaceCleanupApi } from './api/workspace-cleanup-bridge'
 import { workspaceSpaceApi } from './api/workspace-space-bridge'
+import { workbenchWindowsApi } from './api/workbench-windows-bridge'
 import { workspacePortsApi } from './api/workspace-ports-bridge'
 import { linkPreviewApi } from './api/link-preview-bridge'
 import { ptyApi } from './api/pty-bridge'
@@ -122,6 +123,7 @@ const api = {
   worktrees: worktreesApi,
   workspaceCleanup: workspaceCleanupApi,
   workspaceSpace: workspaceSpaceApi,
+  workbenchWindows: workbenchWindowsApi,
   workspacePorts: workspacePortsApi,
   linkPreview: linkPreviewApi,
   pty: ptyApi,

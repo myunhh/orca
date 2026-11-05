@@ -6,14 +6,13 @@ import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
-import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
-import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
+import type { UIZoomDirection } from '../../shared/ui-zoom-level'
+import type { KeybindingOverrides } from '../../shared/keybindings'
 import {
-  keybindingMatchesAction,
-  type KeybindingActionId,
-  type KeybindingInput,
-  type KeybindingOverrides
-} from '../../shared/keybindings'
+  installCompanionWindowZoom,
+  loadCompanionRendererEntry,
+  stepCompanionWindowZoom
+} from './companion-window-chrome'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 
 const MIN_WIDTH = 480
@@ -38,39 +37,13 @@ export function isDashboardPopoutRenderer(sender: WebContents): boolean {
   return getDashboardPopoutWindow()?.webContents === sender
 }
 
-function zoomDashboardPopout(window: BrowserWindow, direction: UIZoomDirection): void {
-  const webContents = window.webContents
-  webContents.setZoomLevel(stepUIZoomLevel(webContents.getZoomLevel(), direction))
-}
-
-const ZOOM_SHORTCUTS: readonly [KeybindingActionId, UIZoomDirection][] = [
-  ['zoom.in', 'in'],
-  ['zoom.out', 'out'],
-  ['zoom.reset', 'reset']
-]
-
-function resolveZoomShortcut(
-  input: KeybindingInput,
-  keybindings: KeybindingOverrides | undefined
-): UIZoomDirection | null {
-  // This runs per keydown; inspect only zoom shortcuts.
-  for (const [actionId, direction] of ZOOM_SHORTCUTS) {
-    if (
-      keybindingMatchesAction(actionId, input, process.platform, keybindings, { context: 'app' })
-    ) {
-      return direction
-    }
-  }
-  return null
-}
-
 /** Zoom the focused popout; return false so menu actions can fall back to the main window. */
 export function zoomDashboardPopoutIfFocused(direction: UIZoomDirection): boolean {
   const popout = getDashboardPopoutWindow()
   if (!popout || !popout.isFocused()) {
     return false
   }
-  zoomDashboardPopout(popout, direction)
+  stepCompanionWindowZoom(popout, direction)
   return true
 }
 
@@ -88,15 +61,6 @@ function broadcastPopoutOpenChanged(open: boolean): void {
   sendToTrustedUIRenderer('dashboard:popoutOpenChanged', open)
   for (const listener of popoutOpenListeners) {
     listener(open)
-  }
-}
-
-function loadDashboardPopout(window: BrowserWindow): void {
-  // Match main-window loading: dev server entry versus packaged emitted HTML.
-  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
-    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/popout.html`)
-  } else {
-    void window.loadFile(join(__dirname, '../renderer/popout.html'))
   }
 }
 
@@ -173,49 +137,7 @@ export function createOrFocusDashboardPopout(
   dashboardPopoutWindow = window
   broadcastPopoutOpenChanged(true)
 
-  // Apply persisted app zoom or the popout always opens at 100%.
-  window.webContents.on('dom-ready', () => {
-    if (!window.isDestroyed()) {
-      window.webContents.setZoomLevel(store?.getUI().uiZoomLevel ?? 0)
-    }
-  })
-  // Compare against last app zoom, not live window zoom, so local changes persist until app-wide zoom actually changes.
-  let lastFollowedZoomLevel = store?.getUI().uiZoomLevel ?? 0
-  const unsubscribeUIChanged = store?.onUIChanged((ui) => {
-    const level = ui.uiZoomLevel ?? 0
-    if (level === lastFollowedZoomLevel) {
-      return
-    }
-    lastFollowedZoomLevel = level
-    if (!window.isDestroyed()) {
-      window.webContents.setZoomLevel(level)
-    }
-  })
-
-  // No renderer shortcut routing exists here; handle zoom chords and yield everything else.
-  window.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') {
-      return
-    }
-    const direction = resolveZoomShortcut(input, options.getKeybindings?.())
-    if (direction) {
-      event.preventDefault()
-      zoomDashboardPopout(window, direction)
-    }
-  })
-
-  window.webContents.on('zoom-changed', (event, direction) => {
-    // Ctrl/Cmd+wheel arrives outside keyboard input routing.
-    if (
-      (direction === 'in' || direction === 'out') &&
-      nativeZoomCommandMatchesKeybindings(direction, process.platform, options.getKeybindings?.(), {
-        context: 'app'
-      })
-    ) {
-      event.preventDefault()
-      zoomDashboardPopout(window, direction)
-    }
-  })
+  const disposeZoom = installCompanionWindowZoom(window, store, options.getKeybindings)
 
   window.once('ready-to-show', () => {
     showWindowWithoutStealingFocus(window)
@@ -269,14 +191,14 @@ export function createOrFocusDashboardPopout(
   window.on('closed', () => {
     mainI18n.off('languageChanged', updateTitle)
     app.removeListener('before-quit', freezeBounds)
-    unsubscribeUIChanged?.()
+    disposeZoom()
     if (dashboardPopoutWindow === window) {
       dashboardPopoutWindow = null
     }
     broadcastPopoutOpenChanged(false)
   })
 
-  loadDashboardPopout(window)
+  loadCompanionRendererEntry(window, 'popout.html')
   return window
 }
 

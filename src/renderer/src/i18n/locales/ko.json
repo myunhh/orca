@@ -19418,6 +19418,9 @@
         "chatRename": {
           "empty": "채팅 이름은 비워 둘 수 없습니다",
           "failed": "이 채팅의 이름을 바꾸지 못했습니다"
+        },
+        "MoveTabToNewWindowMenuItem": {
+          "move": "새 창으로 이동"
         }
       }
     },
@@ -19952,6 +19955,55 @@
     "editor": {
       "formatOnSave": {
         "failed": "{{file}}을(를) 포맷할 수 없습니다. 포맷하지 않고 저장합니다: {{reason}}"
+      }
+    },
+    "workbench": {
+      "window": {
+        "WorkbenchEditorBody": {
+          "reload": "새로고침",
+          "openInMain": "메인 창에서 열기",
+          "loading": "파일 불러오는 중…"
+        },
+        "WorkbenchTabStrip": {
+          "closeTab": "탭 닫기",
+          "returnToMain": "메인 창으로 되돌리기",
+          "openInMain": "메인 창에서 열기",
+          "close": "닫기",
+          "newTerminal": "새 터미널",
+          "splitView": "분할 보기"
+        },
+        "WorkbenchTerminalBody": {
+          "starting": "터미널이 시작되기를 기다리는 중…"
+        },
+        "WorkbenchWindowRoot": {
+          "title": "Orca",
+          "loading": "Orca에 연결하는 중…",
+          "empty": "이 창에 탭이 없습니다"
+        },
+        "bridge": {
+          "workbench": {
+            "command": {
+              "handler": {
+                "workspaceNotReady": "이 워크스페이스는 아직 새 터미널을 열 준비가 되지 않았습니다."
+              }
+            },
+            "editor": {
+              "content": {
+                "read": {
+                  "unavailable": "이 파일은 더 이상 열려 있지 않습니다.",
+                  "tooLarge": "이 파일은 너무 커서 여기에 표시할 수 없습니다. 메인 창에서 여세요."
+                }
+              }
+            }
+          }
+        },
+        "workbench": {
+          "tab": {
+            "move": {
+              "openFailed": "새 창을 열 수 없습니다"
+            }
+          }
+        }
       }
     }
   },
@@ -22274,7 +22326,8 @@
       "importWarpFolder": "Warp 테마 폴더 가져오기",
       "images": "이미지",
       "repoIconImages": "저장소 아이콘 이미지",
-      "audio": "오디오"
+      "audio": "오디오",
+      "workbenchTitle": "Orca 워크벤치"
     }
   },
   "taskProviders": {
@@ -22937,5 +22990,11 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 배포판 {{distro}}이(가) 중지되어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요.",
     "terminalUnverifiable": "WSL 배포판 {{distro}}이(가) 실행 중인지 확인할 수 없어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요."
+  },
+  "workbenchWindow": {
+    "recoverableError": {
+      "title": "이 Orca 창에서 오류가 발생했습니다.",
+      "description": "창을 렌더링하지 못했습니다. 다시 시도하여 다시 마운트하거나, 창을 닫아 탭을 되돌리세요."
+    }
   }
 }
