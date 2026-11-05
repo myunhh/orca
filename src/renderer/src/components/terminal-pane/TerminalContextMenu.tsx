@@ -38,6 +38,8 @@ import { AgentSessionContextCopyMenuItem } from './AgentSessionContextCopyMenuIt
 import { ClearPaneTitleMenuItem } from './ClearPaneTitleMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from './TerminalQuickCommandsSubmenu'
+import { TerminalContextShareMenuItems } from '../terminal-context-share/TerminalContextShareMenuItems'
+import type { TerminalContextShareKind } from '../terminal-context-share/terminal-context-share-request'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -68,6 +70,7 @@ type TerminalContextMenuProps = {
   isNativeChatView: boolean
   onToggleNativeChat: () => void
   onCopyAgentSessionContext: () => void
+  onOpenTerminalContextShare?: (kind: TerminalContextShareKind) => void
   quickCommandHosts: TerminalQuickCommandMenuHost[]
   quickCommandHostLoadFailed: boolean
   quickCommandHostOwnershipPending: boolean
@@ -159,6 +162,7 @@ function TerminalContextMenuItems({
   isNativeChatView,
   onToggleNativeChat,
   onCopyAgentSessionContext,
+  onOpenTerminalContextShare,
   quickCommandHosts,
   quickCommandHostLoadFailed,
   quickCommandHostOwnershipPending,
@@ -231,6 +235,16 @@ function TerminalContextMenuItems({
         )}
       </DropdownMenuItem>
       <AgentSessionContextCopyMenuItem onSelect={onCopyAgentSessionContext} />
+      {onOpenTerminalContextShare ? (
+        <TerminalContextShareMenuItems
+          menuKind="dropdown"
+          onOpen={(kind) => {
+            // Close focus guards before the dialog takes focus, as Set Title does.
+            onOpenChange(false)
+            onOpenTerminalContextShare(kind)
+          }}
+        />
+      ) : null}
       {canToggleNativeChat ? (
         <DropdownMenuItem onSelect={onToggleNativeChat}>
           {isNativeChatView ? <SquareTerminal /> : <MessageSquare />}

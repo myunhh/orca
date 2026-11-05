@@ -15,6 +15,7 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { TabTerminalContextShareMenuItems } from '../terminal-context-share/TabTerminalContextShareMenuItems'
 
 const TAB_COLORS = [
   {
@@ -204,6 +205,7 @@ export function SortableTabContextMenu({
         </ContextMenuItem>
       ) : null}
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
+      <TabTerminalContextShareMenuItems tabId={tab.id} worktreeId={tab.worktreeId} />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
         <X className="size-3.5" />
