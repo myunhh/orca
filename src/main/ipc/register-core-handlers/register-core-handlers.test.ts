@@ -186,6 +186,10 @@ vi.mock('../terminal-preview', () => ({
   registerTerminalPreviewHandlers: registerTerminalPreviewHandlersMock
 }))
 
+vi.mock('../workbench-windows', () => ({
+  registerWorkbenchWindowHandlers: vi.fn()
+}))
+
 vi.mock('../speech', () => ({
   registerSpeechHandlers: registerSpeechHandlersMock
 }))

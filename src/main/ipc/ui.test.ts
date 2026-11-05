@@ -235,17 +235,17 @@ describe('UI IPC', () => {
     const copy = vi.fn()
     const selectAll = vi.fn()
     const event = makeUIEvent({ id: 42 })
-    const isDashboardPopoutRenderer = vi.fn((sender: unknown) => sender === event.sender)
+    const isCompanionWindowRenderer = vi.fn((sender: unknown) => sender === event.sender)
     fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
 
-    registerUIHandlers(makeStore() as never, { isDashboardPopoutRenderer })
+    registerUIHandlers(makeStore() as never, { isCompanionWindowRenderer })
 
     const handler = getNativeSelectionActionHandler()
     handler?.(event, 'copy')
     handler?.(event, 'select-all')
     handler?.(makeUIEvent({ id: 43 }), 'copy')
 
-    expect(isDashboardPopoutRenderer).toHaveBeenCalledWith(event.sender)
+    expect(isCompanionWindowRenderer).toHaveBeenCalledWith(event.sender)
     expect(copy).toHaveBeenCalledOnce()
     expect(selectAll).toHaveBeenCalledOnce()
   })

@@ -13,6 +13,7 @@ import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
 import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { MoveTabToNewWindowMenuItem } from './MoveTabToNewWindowMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
@@ -203,6 +204,7 @@ export function SortableTabContextMenu({
           )}
         </ContextMenuItem>
       ) : null}
+      <MoveTabToNewWindowMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>

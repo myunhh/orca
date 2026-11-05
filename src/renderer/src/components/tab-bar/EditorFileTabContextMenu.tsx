@@ -19,6 +19,7 @@ import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { MoveTabToNewWindowMenuItem } from './MoveTabToNewWindowMenuItem'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
@@ -126,6 +127,7 @@ export function EditorFileTabContextMenu({
           ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
           : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
       </ContextMenuItem>
+      <MoveTabToNewWindowMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>

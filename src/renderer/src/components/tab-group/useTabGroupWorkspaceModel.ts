@@ -35,7 +35,8 @@ export function useTabGroupWorkspaceModel({
       expandedPaneByTabId: state.expandedPaneByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID,
       generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
-      mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false
+      mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false,
+      detachedWindowIdByTabId: state.detachedWindowIdByTabId
     }))
   )
 

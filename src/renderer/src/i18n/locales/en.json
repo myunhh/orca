@@ -20637,6 +20637,9 @@
         "chatRename": {
           "empty": "A chat name can't be empty",
           "failed": "Couldn't rename this chat"
+        },
+        "MoveTabToNewWindowMenuItem": {
+          "move": "Move to New Window"
         }
       }
     },
@@ -21242,6 +21245,55 @@
         },
         "split": {
           "bodyWithoutShortcut": "Right-click the pane for split options."
+        }
+      }
+    },
+    "workbench": {
+      "window": {
+        "WorkbenchEditorBody": {
+          "reload": "Reload",
+          "openInMain": "Open in Main Window",
+          "loading": "Loading file…"
+        },
+        "WorkbenchTabStrip": {
+          "closeTab": "Close Tab",
+          "returnToMain": "Return to Main Window",
+          "openInMain": "Open in Main Window",
+          "close": "Close",
+          "newTerminal": "New Terminal",
+          "splitView": "Split View"
+        },
+        "WorkbenchTerminalBody": {
+          "starting": "Waiting for the terminal to start…"
+        },
+        "WorkbenchWindowRoot": {
+          "title": "Orca",
+          "loading": "Connecting to Orca…",
+          "empty": "No tabs in this window"
+        },
+        "bridge": {
+          "workbench": {
+            "command": {
+              "handler": {
+                "workspaceNotReady": "This workspace is not ready for a new terminal yet."
+              }
+            },
+            "editor": {
+              "content": {
+                "read": {
+                  "unavailable": "This file is no longer open.",
+                  "tooLarge": "This file is too large to show here. Open it in the main window."
+                }
+              }
+            }
+          }
+        },
+        "workbench": {
+          "tab": {
+            "move": {
+              "openFailed": "Could not open a new window"
+            }
+          }
         }
       }
     }
@@ -23372,7 +23424,8 @@
       "repoIconImages": "Repo icon images",
       "audio": "Audio",
       "importGhosttyConfig": "Import Ghostty Config",
-      "importKittyConfig": "Import Kitty Config"
+      "importKittyConfig": "Import Kitty Config",
+      "workbenchTitle": "Orca Workbench"
     }
   },
   "taskProviders": {
@@ -23894,5 +23947,11 @@
   },
   "checks": {
     "rerunUnsuccessful": "Rerun unsuccessful"
+  },
+  "workbenchWindow": {
+    "recoverableError": {
+      "title": "This Orca window hit an error.",
+      "description": "The window could not finish rendering. Retry to remount it, or close it to return its tabs."
+    }
   }
 }

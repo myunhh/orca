@@ -12,7 +12,14 @@ import { StructuredAgentSessionAttentionBridge } from '../components/native-chat
 import { StructuredAgentSessionStatusBridge } from '../components/native-chat/StructuredAgentSessionStatusBridge'
 import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/NativeChatVisualGuestThemePublisher'
 
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+
 const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
+const WorkbenchWindowBridge = lazy(
+  () => import('../components/workbench-window/bridge/WorkbenchWindowBridge')
+)
+// Paired web clients cannot open native windows.
+const workbenchWindowsAvailable = !isPairedWebClientWindow()
 
 /** Isolate high-churn subscriptions from App rendering; services outlive their consuming surfaces. */
 export function AppBackgroundServices(): React.JSX.Element {
@@ -35,6 +42,11 @@ export function AppBackgroundServices(): React.JSX.Element {
       {dashboardPopoutEnabled ? (
         <Suspense fallback={null}>
           <DashboardPopoutBridge />
+        </Suspense>
+      ) : null}
+      {workbenchWindowsAvailable ? (
+        <Suspense fallback={null}>
+          <WorkbenchWindowBridge />
         </Suspense>
       ) : null}
       <AgentHibernationGate />

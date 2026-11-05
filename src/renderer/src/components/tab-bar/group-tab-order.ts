@@ -149,7 +149,8 @@ export function getActiveTabNavOrder(
     | 'tabsByWorktree'
     | 'openFiles'
     | 'browserTabsByWorktree'
-  >,
+  > &
+    Partial<Pick<AppState, 'detachedWindowIdByTabId'>>,
   worktreeId: string,
   ids: ActiveTabNavOrderIds = {}
 ): VisibleTabRef[] {
@@ -183,7 +184,8 @@ export function getActiveTabNavOrder(
       ...terminalIds,
       ...groupTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
     ])
-    return getGroupVisibleTabOrder(
+    const detached = state.detachedWindowIdByTabId
+    const visible = getGroupVisibleTabOrder(
       group,
       groupTabs,
       groupTerminalIds,
@@ -191,6 +193,10 @@ export function getActiveTabNavOrder(
       new Set(browserIds),
       new Set(simulatorIds)
     )
+    // Tabs a workbench window shows are not cyclable in the main window.
+    return detached
+      ? visible.filter((ref) => !ref.tabId || detached[ref.tabId] === undefined)
+      : visible
   }
 
   const visibleIds = reconcileTabOrder(

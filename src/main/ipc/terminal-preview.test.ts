@@ -416,8 +416,8 @@ describe('registerTerminalPreviewHandlers', () => {
     ).resolves.toEqual({ cols: 132, rows: 40 })
     expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
       'p1',
-      'dashboard-popout:1',
-      'dashboard-popout:1',
+      'terminal-preview:1',
+      'terminal-preview:1',
       132,
       40
     )
@@ -441,7 +441,7 @@ describe('registerTerminalPreviewHandlers', () => {
     await expect(
       handlers.get('terminalPreview:fit')!(eventFor(sender), { ptyId: 'p1', cols: 132, rows: 40 })
     ).resolves.toBeNull()
-    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p1', 'dashboard-popout:1')
+    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p1', 'terminal-preview:1')
 
     handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p1' })
     expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(1)
@@ -518,7 +518,7 @@ describe('registerTerminalPreviewHandlers', () => {
       rows: 40
     })
     handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p1' })
-    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p1', 'dashboard-popout:1')
+    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p1', 'terminal-preview:1')
     expect(runtime.unsubscribeResize).toHaveBeenCalledBefore(runtime.unregisterRemoteDesktopViewer)
 
     handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p1' })
@@ -530,7 +530,7 @@ describe('registerTerminalPreviewHandlers', () => {
       rows: 30
     })
     sender.fireDestroyed()
-    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p2', 'dashboard-popout:1')
+    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p2', 'terminal-preview:1')
     expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(2)
   })
 

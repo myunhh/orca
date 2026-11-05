@@ -3,7 +3,7 @@ import './lib/react-devtools-commit-hook-shim'
 import './lib/react-commit-cascade-observer'
 import './assets/main.css'
 
-import { StrictMode, useEffect } from 'react'
+import { StrictMode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -11,19 +11,14 @@ import {
   installRendererCrashDiagnostics,
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
-import { applyDocumentTheme } from './lib/document-theme'
-import { resolvePaintedTheme } from './lib/terminal-app-theme'
-import { buildAppFontFamily } from './lib/app-font-family'
-import { applyCodeFontSmoothing } from './lib/code-font-smoothing'
 import { I18nProvider } from './i18n/I18nProvider'
+import { CompanionWindowSettingsSync } from './components/companion-window/CompanionWindowSettingsSync'
+import { seedCompanionWindowSettings } from './components/companion-window/companion-window-appearance'
 import { translate } from './i18n/i18n'
-import { useAppStore } from './store'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
-import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -34,74 +29,12 @@ recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env
 installRendererCrashDiagnostics('dashboard-popout')
 setReactCommitCascadeRendererSurface('dashboard-popout')
 
-function applyPopoutAppearance(settings: GlobalSettings | null): void {
-  applyDocumentTheme(resolvePaintedTheme(settings), { disableTransitions: false })
-  document.documentElement.style.setProperty(
-    '--app-font-family',
-    buildAppFontFamily(settings?.appFontFamily)
-  )
-  applyCodeFontSmoothing(settings?.codeFontSmoothing)
-}
-
-// Seed this separate store synchronously to prevent OS-theme flash before async appearance hydration.
-let startupSettings: GlobalSettings | null = null
-try {
-  startupSettings = window.api.settings.getSync()
-} catch {
-  // Async hydration below remains available if the startup read fails.
-}
-if (startupSettings) {
-  useAppStore.setState({ settings: startupSettings })
-}
-applyPopoutAppearance(startupSettings)
+seedCompanionWindowSettings()
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
   recordRendererCrashBreadcrumb('popout_root_missing')
   throw new Error('Pop-out root element not found.')
-}
-
-function PopoutSettingsSync(): null {
-  const settings = useAppStore((state) => state.settings)
-  useReduceVisualEffects(settings?.reduceVisualEffects)
-
-  useEffect(() => {
-    let disposed = false
-    // Preview-terminal copy/paste overrides live in a separate keybinding file.
-    void useAppStore.getState().fetchKeybindings()
-    const setSettings = (next: GlobalSettings): void => {
-      if (!disposed) {
-        useAppStore.setState({ settings: next })
-      }
-    }
-    const offChanged = window.api.settings.onChanged((updates) => {
-      const current = useAppStore.getState().settings
-      if (current) {
-        setSettings({ ...current, ...updates })
-      }
-    })
-    void window.api.settings
-      .get()
-      .then(setSettings)
-      .catch(() => undefined)
-    return () => {
-      disposed = true
-      offChanged()
-    }
-  }, [])
-
-  useEffect(() => {
-    applyPopoutAppearance(settings)
-    if (settings?.theme !== 'system') {
-      return
-    }
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (): void => applyDocumentTheme(resolvePaintedTheme(settings))
-    media.addEventListener('change', handleChange)
-    return () => media.removeEventListener('change', handleChange)
-  }, [settings])
-
-  return null
 }
 
 function PopoutRoot(): React.JSX.Element {
@@ -124,7 +57,7 @@ function PopoutRoot(): React.JSX.Element {
 getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
   <StrictMode>
     <I18nProvider>
-      <PopoutSettingsSync />
+      <CompanionWindowSettingsSync />
       <PopoutRoot />
     </I18nProvider>
   </StrictMode>

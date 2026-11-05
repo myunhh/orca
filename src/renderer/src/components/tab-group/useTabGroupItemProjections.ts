@@ -19,6 +19,8 @@ export type TabGroupWorktreeSnapshot = {
   terminalLayoutsByTabId: NonNullable<TabGroupAppState['terminalLayoutsByTabId']>
   generatedTabTitlesEnabled: boolean
   mobileEmulatorEnabled: boolean
+  /** Tabs shown by a workbench window; hidden here without leaving tabOrder. */
+  detachedWindowIdByTabId: Readonly<Record<string, string>>
 }
 
 export type GroupEditorItem = OpenFile & { tabId: string }
@@ -61,10 +63,15 @@ export function useTabGroupItemProjections({
     [worktreeState.browserTabs]
   )
   const groupTabById = useMemo(() => new Map(groupTabs.map((item) => [item.id, item])), [groupTabs])
+  const detached = worktreeState.detachedWindowIdByTabId
+  const stripTabs = useMemo(
+    () => groupTabs.filter((item) => detached[item.id] === undefined),
+    [detached, groupTabs]
+  )
 
   const terminalTabs = useMemo<TerminalTabItem[]>(
     () =>
-      groupTabs
+      stripTabs
         .filter((item) => item.contentType === 'terminal')
         .map((item) => {
           const terminalTab = terminalTabById.get(item.entityId)
@@ -97,53 +104,58 @@ export function useTabGroupItemProjections({
             pendingActivationSpawn: terminalTab?.pendingActivationSpawn
           }
         }),
-    [groupTabs, terminalTabById, worktreeId, worktreeState.generatedTabTitlesEnabled]
+    [stripTabs, terminalTabById, worktreeId, worktreeState.generatedTabTitlesEnabled]
   )
 
   const editorItems = useMemo<GroupEditorItem[]>(
     () =>
-      groupTabs
+      stripTabs
         .filter((item) => isEditorTabContentType(item.contentType))
         .map((item) => {
           const file = openFileById.get(item.entityId)
           return file ? { ...file, tabId: item.id } : null
         })
         .filter((item): item is GroupEditorItem => item !== null),
-    [groupTabs, openFileById]
+    [stripTabs, openFileById]
   )
 
   const browserItems = useMemo<GroupBrowserItem[]>(
     () =>
-      groupTabs
+      stripTabs
         .filter((item) => item.contentType === 'browser')
         .map((item) => {
           const bt = browserTabById.get(item.entityId)
           return bt ? { ...bt, tabId: item.id } : null
         })
         .filter((item): item is GroupBrowserItem => item !== null),
-    [browserTabById, groupTabs]
+    [browserTabById, stripTabs]
   )
 
   const agentSessionItems = useMemo<GroupAgentSessionItem[]>(
     () =>
-      groupTabs.filter(
+      stripTabs.filter(
         (item): item is GroupAgentSessionItem => item.contentType === 'agent-session'
       ),
-    [groupTabs]
+    [stripTabs]
   )
 
   const tabBarOrder = useMemo(
     () =>
-      (group?.tabOrder ?? []).map((itemId) => {
+      (group?.tabOrder ?? []).flatMap((itemId) => {
         const item = groupTabById.get(itemId)
         if (!item) {
-          return itemId
+          return [itemId]
         }
-        return item.contentType === 'terminal' || item.contentType === 'browser'
-          ? item.entityId
-          : item.id
+        if (detached[item.id] !== undefined) {
+          return []
+        }
+        return [
+          item.contentType === 'terminal' || item.contentType === 'browser'
+            ? item.entityId
+            : item.id
+        ]
       }),
-    [group, groupTabById]
+    [detached, group, groupTabById]
   )
 
   return {
