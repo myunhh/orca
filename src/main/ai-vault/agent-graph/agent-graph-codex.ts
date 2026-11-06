@@ -6,6 +6,10 @@ import { sessionIdFromFileName } from '../session-scanner-accumulator'
 import type { AgentGraphAccumulator } from './agent-graph-accumulator'
 import { AGENT_GRAPH_ROOT_NODE_ID } from './agent-graph-claude-ids'
 import {
+  codexThreadIdFromRolloutPath,
+  discoverCodexChildrenByParent
+} from './agent-graph-codex-discovery'
+import {
   readCodexRolloutSummary,
   type CodexRolloutActivity,
   type CodexRolloutSummary
@@ -60,7 +64,7 @@ async function addCodexChildren(
     directoryCache: Map<string, string[]>
   }
 ): Promise<void> {
-  if (!acc.canDescend(args.depth) || args.parent.activities.length === 0) {
+  if (!acc.canDescend(args.depth)) {
     return
   }
   const byThread = new Map<string, CodexRolloutActivity[]>()
@@ -69,27 +73,36 @@ async function addCodexChildren(
     list.push(activity)
     byThread.set(activity.threadId, list)
   }
+  // Spawn events are not always recorded in the parent rollout; the children's own metadata is.
+  const knownPaths = new Map<string, string>()
+  const parentThreadId = args.parent.threadId ?? codexThreadIdFromRolloutPath(args.parent.path)
+  if (parentThreadId) {
+    const discovered = await discoverCodexChildrenByParent({
+      parentPath: args.parent.path,
+      parentThreadId,
+      directoryCache: args.directoryCache,
+      checkCancelled: () => void acc.canDescend(args.depth)
+    })
+    for (const { threadId, path } of discovered) {
+      knownPaths.set(threadId, path)
+      if (!byThread.has(threadId)) {
+        byThread.set(threadId, [])
+      }
+    }
+  }
   const added: { threadId: string; child: CodexRolloutSummary }[] = []
   for (const [threadId, activities] of byThread) {
     const first = activities[0]
-    if (!first) {
-      continue
-    }
-    const childPath = await resolveCodexChildPath(
-      args.parent.path,
-      threadId,
-      first.atMs,
-      args.directoryCache
-    )
+    const childPath =
+      knownPaths.get(threadId) ??
+      (first
+        ? await resolveCodexChildPath(args.parent.path, threadId, first.atMs, args.directoryCache)
+        : null)
     const child = childPath ? await readCodexRolloutSummary(childPath) : null
     // Forked rollouts copy parent metadata; trust only a child whose own first meta names this parent.
-    const parentThreadId = child?.origin?.parentage?.parentThreadId
-    if (
-      child &&
-      parentThreadId &&
-      args.parent.threadId &&
-      parentThreadId !== args.parent.threadId
-    ) {
+    const declaredParentId = child?.origin?.parentage?.parentThreadId
+    if (child && declaredParentId && parentThreadId && declaredParentId !== parentThreadId) {
+      acc.addIssue(`Codex thread ${threadId} names a different parent; left out of the graph`)
       continue
     }
     if (addCodexThreadNode(acc, { ...args, threadId, activities, child })) {
@@ -142,6 +155,15 @@ function addCodexThreadNode(
   }
   if (!child) {
     acc.addIssue(`Transcript for Codex thread ${args.threadId} was not found`)
+  }
+  if (activities.length === 0 && child) {
+    acc.addEdge({
+      from: args.parentNodeId,
+      to: nodeId,
+      kind: 'spawn',
+      text: child.firstUserText,
+      at: child.startedAt
+    })
   }
   for (const activity of activities) {
     acc.addEdge({
