@@ -20,6 +20,7 @@ import {
 } from './agent-graph-transcript-admission'
 import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
 import { buildAgentGraphForSender } from './agent-graph-build-requests'
+import { buildLiveAgentGraphForPane, startAgentGraphLiveHistory } from './agent-graph-live-history'
 
 const MAX_PANE_KEY_LENGTH = 256
 const MAX_PATH_LENGTH = 4096
@@ -62,6 +63,13 @@ export async function buildAgentGraphForPane(
     return { ok: false, reason: 'no-session', message: 'Invalid agent graph request' }
   }
   const hooked = paneSessionFromHooks(request.paneKey)
+  // Remote panes and agents without a transcript reader still report sub-agents through hooks.
+  if (hooked && (hooked.remote || (hooked.agentType && !hooked.provider))) {
+    const live = buildLiveAgentGraphForPane(request.paneKey)
+    if (live) {
+      return { ok: true, graph: live }
+    }
+  }
   if (hooked?.remote) {
     return {
       ok: false,
@@ -161,6 +169,7 @@ function readNodeMessagesArgs(args: unknown): AgentGraphNodeMessagesArgs | null 
 
 /** Subagent listing and the agent graph share the transcript-root admission rules. */
 export function registerAiVaultSubagentHandlers(): void {
+  startAgentGraphLiveHistory()
   ipcMain.handle(
     'aiVault:listSubagentSessions',
     (_event, args?: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>

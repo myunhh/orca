@@ -99,7 +99,7 @@ function useNodeMessages(node: AgentGraphNode): NodeMessagesState {
   const [state, setState] = useState<NodeMessagesState>({ path: null, result: null })
   const { provider, transcriptPath } = node
   useEffect(() => {
-    if (!transcriptPath) {
+    if (!transcriptPath || provider === 'live') {
       return
     }
     let cancelled = false

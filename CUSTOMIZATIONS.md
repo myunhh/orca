@@ -64,6 +64,7 @@ See which agents your main agent called, which model each one ran on, and what t
   - **Claude Code**: Agent/Task sub-agents and Workflow runs, including nested agents. Calls recorded in the main transcript appear even when the sub-agent's own transcript is missing.
   - **Codex**: sub-agent threads, found through the `parent_thread_id` each child records about itself. Prompts come from the parent's `spawn_agent` calls and follow-ups from its `send_input` calls.
   - **OMP**: sub-agent transcripts stored in the session's folder.
+  - **Any other CLI, and remote/SSH panes**: a live view built from the sub-agents the CLI reports through Orca's hooks. It shows each sub-agent's name, type, model (when reported) and state, and keeps finished ones for the session. It cannot show prompts, results or conversations. CLIs that report no sub-agents through hooks (for example OpenCode and OmO today) show only the main agent.
 - **Nodes** show each agent's name, agent type, model, status and token count.
 - **Edges** show the prompt sent (spawn), follow-up messages (message) and the returned answer (result).
 - **Node details**: click a node to see the prompt it received, the result it returned and its transcript.
@@ -71,7 +72,7 @@ See which agents your main agent called, which model each one ran on, and what t
 
 **Limitations**
 
-- Only sessions on the local machine are supported. Sessions on remote hosts, including SSH hosts, are not.
+- Full graphs (prompts, results, transcripts) need a local Claude, Codex or OMP session. Everything else gets the live view above.
 
 **Key files**
 

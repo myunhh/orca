@@ -15,14 +15,9 @@ export type AgentGraphPaneOption = {
 
 type TerminalLayouts = Record<string, { activeLeafId?: string | null } | undefined>
 
-/** Claude, Codex, and OMP sessions graph; an unnamed agent qualifies only when it reported a transcript. */
+/** Any pane with a hook row graphs: transcript agents in full, the rest from live hook rows. */
 export function isAgentGraphPaneEntry(entry: AgentStatusEntry | undefined): boolean {
-  if (!entry?.providerSession) {
-    return false
-  }
-  return entry.agentType
-    ? isAgentGraphProvider(entry.agentType)
-    : Boolean(entry.providerSession.transcriptPath)
+  return Boolean(entry && (entry.agentType || entry.providerSession))
 }
 
 export function graphablePaneKey(
@@ -37,11 +32,11 @@ export function agentGraphPaneOptions(
 ): AgentGraphPaneOption[] {
   const options: AgentGraphPaneOption[] = []
   for (const entry of Object.values(statuses)) {
-    if (!entry?.providerSession || !isAgentGraphPaneEntry(entry)) {
+    if (!entry || !isAgentGraphPaneEntry(entry)) {
       continue
     }
     const agentType = entry.agentType ?? null
-    const transcriptPath = entry.providerSession.transcriptPath
+    const transcriptPath = entry.providerSession?.transcriptPath
     options.push({
       paneKey: entry.paneKey,
       label: entry.terminalTitle?.trim() || agentType || entry.paneKey,

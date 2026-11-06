@@ -2,11 +2,14 @@ import type { AiVaultSubagentRunStatus } from '../ai-vault/contracts/ai-vault-ty
 
 export type AgentGraphProvider = 'claude' | 'codex' | 'omp'
 
+/** 'live' marks graphs built from hook rows for CLIs that have no transcript reader. */
+export type AgentGraphSource = AgentGraphProvider | 'live'
+
 export type AgentGraphNodeRole = 'root' | 'subagent' | 'workflow'
 
 export type AgentGraphNode = {
   id: string
-  provider: AgentGraphProvider
+  provider: AgentGraphSource
   parentId: string | null
   role: AgentGraphNodeRole
   agentType: string | null
@@ -44,9 +47,10 @@ export type AgentGraphMessage = {
 }
 
 export type AgentGraph = {
-  provider: AgentGraphProvider
+  provider: AgentGraphSource
   rootSessionId: string
-  rootTranscriptPath: string
+  /** Null for live graphs, which have no transcript. */
+  rootTranscriptPath: string | null
   nodes: AgentGraphNode[]
   edges: AgentGraphEdge[]
   truncated: boolean
