@@ -8,6 +8,24 @@ All changes sit on top of upstream commit `aefcdd99` and live in the commit rang
 git format-patch aefcdd99..76cda768 -o orca-customizations
 ```
 
+## Keeping these features when Orca updates
+
+Two things could otherwise remove the features: the app updating itself, and pulling new upstream code.
+
+**Packaged builds do not self-update.** The updater is switched off in this fork's builds (`src/main/updater/self-update-policy.ts`), so an upstream release is never installed over your build. To get Orca's updater back, launch with `ORCA_ALLOW_UPSTREAM_UPDATES=1`. Running from source with `pnpm dev` never self-updates.
+
+**Pulling upstream changes** is one command:
+
+```bash
+node fork-maintenance/sync-with-upstream.mjs
+```
+
+It adds the `upstream` remote on first use, tags a backup, merges `upstream/main`, regenerates the generated localization catalogs and typechecks. The locale files merge key by key, so new upstream text and this fork's text both stay. If upstream edited the same lines as this fork, the merge stops and lists the files: fix them, `git add` them, then run the command again to finish. Git remembers each resolution for next time.
+
+- Undo a sync: `git reset --hard <backup tag printed by the script>`
+- Skip the typecheck: add `--skip-checks`
+- Afterwards run `pnpm install` and rebuild or restart `pnpm dev`
+
 ## 1. Detached Workbench Windows
 
 Move terminals, Markdown files and images into separate windows, the way Chrome lets you drag a tab out into its own window.

@@ -2,8 +2,7 @@
 // Usage: node fork-maintenance/sync-with-upstream.mjs [--skip-checks]
 import { execFileSync, spawnSync } from 'node:child_process'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 const UPSTREAM_URL = 'https://github.com/stablyai/orca.git'
 const UPSTREAM_BRANCH = 'main'
@@ -22,7 +21,7 @@ const REGENERATE_COMMANDS = [
 const TYPECHECK_PROJECTS = ['config/tsconfig.node.json', 'config/tsconfig.tc.web.json']
 
 const skipChecks = process.argv.includes('--skip-checks')
-const scriptDir = dirname(fileURLToPath(import.meta.url))
+const scriptDir = import.meta.dirname
 const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   cwd: scriptDir,
   encoding: 'utf8'
@@ -59,7 +58,11 @@ function unmergedFiles() {
   return gitOrThrow('diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean)
 }
 
+const changedTrackedFiles = () =>
+  git('diff', '--name-only', 'HEAD').stdout.split('\n').filter(Boolean)
+
 function regenerateCatalogs() {
+  const dirtyBefore = new Set(changedTrackedFiles())
   for (const [script, ...args] of REGENERATE_COMMANDS) {
     if (!existsSync(resolve(repoRoot, script))) {
       say(`skipping ${script}: not present in this upstream version`)
@@ -70,9 +73,18 @@ function regenerateCatalogs() {
       say(`${script} failed:\n${result.stderr || result.stdout}`)
     }
   }
-  if (git('status', '--porcelain', '--untracked-files=no').stdout.trim()) {
-    gitOrThrow('commit', '-a', '-q', '-m', 'Regenerate localization catalogs after upstream sync')
-    say('regenerated localization catalogs and committed them')
+  // Only what regeneration touched: the person finishing a merge may have unrelated edits open.
+  const regenerated = changedTrackedFiles().filter((file) => !dirtyBefore.has(file))
+  if (regenerated.length > 0) {
+    gitOrThrow(
+      'commit',
+      '-q',
+      '-m',
+      'Regenerate localization catalogs after upstream sync',
+      '--',
+      ...regenerated
+    )
+    say(`regenerated localization catalogs and committed ${regenerated.length} file(s)`)
   }
 }
 
@@ -95,7 +107,39 @@ function typecheck() {
   return !failed
 }
 
+function mergeInProgress() {
+  return git('rev-parse', '-q', '--verify', 'MERGE_HEAD').status === 0
+}
+
+function finishRemainingSteps(branch, upstreamRef) {
+  say(`merged ${upstreamRef} into ${branch}`)
+  regenerateCatalogs()
+  if (!skipChecks && !typecheck()) {
+    say('The merge is committed but does not typecheck; fix the errors above before building.')
+    return 3
+  }
+  say('Done. Next: `pnpm install` (dependencies may have changed), then `pnpm dev` or rebuild.')
+  say(`Then publish with: git push origin ${branch}`)
+  return 0
+}
+
+function reportUnresolved(left) {
+  say(`Merge stopped: ${left.length} file(s) need a manual decision:`)
+  console.log(left.map((name) => `  ${name}`).join('\n'))
+  say('Fix each file, `git add` it, then run this script again to finish the merge.')
+  say('Git remembers your choices for next time. To give up instead: git merge --abort')
+}
+
 function main() {
+  if (mergeInProgress()) {
+    const left = unmergedFiles()
+    if (left.length > 0) {
+      reportUnresolved(left)
+      return 2
+    }
+    gitOrThrow('commit', '--no-edit')
+    return finishRemainingSteps(gitOrThrow('rev-parse', '--abbrev-ref', 'HEAD'), 'upstream')
+  }
   if (git('status', '--porcelain', '--untracked-files=normal').stdout.trim()) {
     say('The working tree has uncommitted changes. Commit or stash them first.')
     return 1
@@ -125,23 +169,12 @@ function main() {
     }
     const left = unmergedFiles()
     if (left.length > 0) {
-      say(`Merge stopped: ${left.length} file(s) need a manual decision:`)
-      console.log(left.map((name) => `  ${name}`).join('\n'))
-      say('Resolve them, `git add` each, then `git commit`. Git remembers the choices for next time.')
-      say(`To give up instead: git merge --abort`)
+      reportUnresolved(left)
       return 2
     }
     gitOrThrow('commit', '--no-edit')
   }
-  say(`merged ${upstreamRef} into ${branch}`)
-  regenerateCatalogs()
-  if (!skipChecks && !typecheck()) {
-    say('The merge is committed but does not typecheck; fix the errors above before building.')
-    return 3
-  }
-  say('Done. Next: `pnpm install` (dependencies may have changed), then `pnpm dev` or rebuild.')
-  say(`Then publish with: git push origin ${branch}`)
-  return 0
+  return finishRemainingSteps(branch, upstreamRef)
 }
 
 process.exitCode = main()
