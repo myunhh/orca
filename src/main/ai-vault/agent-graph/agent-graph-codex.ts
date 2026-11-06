@@ -5,12 +5,15 @@ import { wslGatedReaddir } from '../../native-chat/wsl-transcript-fs-access'
 import { sessionIdFromFileName } from '../session-scanner-accumulator'
 import type { AgentGraphAccumulator } from './agent-graph-accumulator'
 import { AGENT_GRAPH_ROOT_NODE_ID } from './agent-graph-claude-ids'
+import { codexCallsForThread, codexCollabPromptText } from './agent-graph-codex-calls'
 import {
   codexThreadIdFromRolloutPath,
   discoverCodexChildrenByParent
 } from './agent-graph-codex-discovery'
+import type { CodexSubagentParentage } from '../scanners/codex/session-scanner-codex-non-user-origin'
 import {
   readCodexRolloutSummary,
+  type CodexCollabCall,
   type CodexRolloutActivity,
   type CodexRolloutSummary
 } from './agent-graph-codex-rollout'
@@ -105,7 +108,15 @@ async function addCodexChildren(
       acc.addIssue(`Codex thread ${threadId} names a different parent; left out of the graph`)
       continue
     }
-    if (addCodexThreadNode(acc, { ...args, threadId, activities, child })) {
+    if (
+      addCodexThreadNode(acc, {
+        ...args,
+        threadId,
+        activities,
+        child,
+        parentCalls: args.parent.collabCalls
+      })
+    ) {
       if (child) {
         added.push({ threadId, child })
       }
@@ -129,6 +140,7 @@ function addCodexThreadNode(
     threadId: string
     activities: CodexRolloutActivity[]
     child: CodexRolloutSummary | null
+    parentCalls: readonly CodexCollabCall[]
   }
 ): boolean {
   const { child, activities } = args
@@ -140,7 +152,7 @@ function addCodexThreadNode(
     parentId: args.parentNodeId,
     role: 'subagent',
     agentType: parentage?.agentRole ?? null,
-    label: parentage?.agentNickname ?? parentage?.agentPath ?? first?.agentPath ?? args.threadId,
+    label: codexThreadLabel(parentage, first?.agentPath, args.threadId),
     model: child?.model ?? null,
     status: codexThreadStatus(child, activities),
     transcriptPath: child?.path ?? null,
@@ -156,39 +168,72 @@ function addCodexThreadNode(
   if (!child) {
     acc.addIssue(`Transcript for Codex thread ${args.threadId} was not found`)
   }
-  if (activities.length === 0 && child) {
+  const { spawn, followUps } = codexCallsForThread(args.parentCalls, {
+    threadId: args.threadId,
+    origin: child?.origin
+  })
+  const spawnText =
+    (spawn ? codexCollabPromptText(spawn.arguments) : null) ??
+    child?.firstUserText ??
+    child?.firstUserTextFallback ??
+    null
+  const base = { from: args.parentNodeId, to: nodeId }
+  if (!activities.some((activity) => activity.kind === 'started')) {
     acc.addEdge({
-      from: args.parentNodeId,
-      to: nodeId,
+      ...base,
       kind: 'spawn',
-      text: child.firstUserText,
-      at: child.startedAt
+      callId: spawn?.callId,
+      text: spawnText,
+      at: spawn?.at ?? child?.startedAt ?? null
     })
   }
   for (const activity of activities) {
     acc.addEdge({
-      from: args.parentNodeId,
-      to: nodeId,
+      ...base,
       kind: activity.kind === 'started' ? 'spawn' : 'message',
+      callId: activity.kind === 'started' ? spawn?.callId : undefined,
       text:
         activity.kind === 'started'
-          ? (child?.firstUserText ?? null)
+          ? spawnText
           : activity.kind === 'interrupted'
             ? 'interrupted'
             : null,
       at: activity.at
     })
   }
-  if (child?.complete && child.lastAgentText) {
+  for (const call of followUps) {
+    acc.addEdge({
+      ...base,
+      kind: 'message',
+      callId: call.callId,
+      text: codexCollabPromptText(call.arguments),
+      at: call.at
+    })
+  }
+  const resultText = child?.lastAgentText ?? child?.lastAgentTextFallback
+  if (child?.complete && resultText) {
     acc.addEdge({
       from: nodeId,
       to: args.parentNodeId,
       kind: 'result',
-      text: child.lastAgentText,
+      text: resultText,
       at: child.updatedAt
     })
   }
   return true
+}
+
+function codexThreadLabel(
+  parentage: CodexSubagentParentage | null | undefined,
+  activityPath: string | undefined | null,
+  threadId: string
+): string {
+  const path = parentage?.agentPath ?? activityPath ?? null
+  const tail = path ? (path.split('/').findLast((part) => part !== '') ?? null) : null
+  if (parentage?.agentNickname && tail) {
+    return `${parentage.agentNickname} · ${tail}`
+  }
+  return parentage?.agentNickname ?? path ?? threadId
 }
 
 function codexThreadStatus(

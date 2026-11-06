@@ -1,5 +1,6 @@
 import type { Stats } from 'node:fs'
 import { createInterface } from 'node:readline'
+import { isCodexCollabToolRowName } from '../../../shared/codex-collab-agent-tools'
 import { readActivity } from '../../../shared/codex-subagent-transcript'
 import { openTranscriptReadStream, wslGatedStat } from '../../native-chat/wsl-transcript-fs-access'
 import {
@@ -19,6 +20,15 @@ export type CodexRolloutActivity = {
   atMs: number
 }
 
+/** A spawn/follow-up/wait call the thread made; newer Codex builds record these instead of activity events. */
+export type CodexCollabCall = {
+  callId: string
+  name: string
+  arguments: string
+  output: string | null
+  at: string | null
+}
+
 export type CodexRolloutSummary = {
   path: string
   threadId: string | null
@@ -28,13 +38,19 @@ export type CodexRolloutSummary = {
   messageCount: number
   firstUserText: string | null
   lastAgentText: string | null
+  firstUserTextFallback: string | null
+  lastAgentTextFallback: string | null
   startedAt: string | null
   updatedAt: string | null
   mtimeMs: number
   /** Latest task_/turn_ started/complete pair says the thread finished its last turn. */
   complete: boolean
   activities: CodexRolloutActivity[]
+  collabCalls: CodexCollabCall[]
 }
+
+const MAX_COLLAB_CALLS = 200
+const MAX_COLLAB_TEXT_CHARS = 8192
 
 const rollouts = new AgentGraphFileMemo<CodexRolloutSummary>()
 
@@ -61,12 +77,16 @@ async function scanCodexRollout(path: string, mtimeMs: number): Promise<CodexRol
     messageCount: 0,
     firstUserText: null,
     lastAgentText: null,
+    firstUserTextFallback: null,
+    lastAgentTextFallback: null,
     startedAt: null,
     updatedAt: null,
     mtimeMs,
     complete: false,
-    activities: []
+    activities: [],
+    collabCalls: []
   }
+  const callsById = new Map<string, CodexCollabCall>()
   let sawSessionMeta = false
   const input = openTranscriptReadStream(path, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
@@ -93,6 +113,8 @@ async function scanCodexRollout(path: string, mtimeMs: number): Promise<CodexRol
       }
       if (record.type === 'event_msg' && payload) {
         consumeEventMessage(summary, record, payload, timestamp)
+      } else if (record.type === 'response_item' && payload) {
+        consumeResponseItem(summary, callsById, payload, timestamp)
       }
     }
   } catch {
@@ -150,6 +172,80 @@ function consumeEventMessage(
           atMs: activity.startedAt,
           at: timestamp ?? new Date(activity.startedAt).toISOString()
         })
+      }
+      break
+    }
+    default:
+      break
+  }
+}
+
+function clip(text: string): string {
+  return text.length > MAX_COLLAB_TEXT_CHARS ? text.slice(0, MAX_COLLAB_TEXT_CHARS) : text
+}
+
+function stringifyPayloadValue(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return clip(value)
+  }
+  return value === undefined || value === null ? null : clip(JSON.stringify(value))
+}
+
+function messageText(payload: Record<string, unknown>): string | null {
+  const content = Array.isArray(payload.content) ? payload.content : []
+  const parts = content.flatMap((part) => {
+    const text = extractString(asRecord(part)?.text)
+    return text ? [text] : []
+  })
+  return parts.length > 0 ? parts.join('\n') : null
+}
+
+/** Rollouts that omit user_message/agent_message events still carry the exchange as response items. */
+function consumeResponseItem(
+  summary: CodexRolloutSummary,
+  callsById: Map<string, CodexCollabCall>,
+  payload: Record<string, unknown>,
+  timestamp: string | null
+): void {
+  switch (payload.type) {
+    case 'message': {
+      const text = messageText(payload)
+      if (!text) {
+        return
+      }
+      if (payload.role === 'assistant') {
+        summary.lastAgentTextFallback = text
+      } else if (payload.role === 'user' && !text.trimStart().startsWith('<')) {
+        // Leading tag blocks are injected environment context, not the task.
+        summary.firstUserTextFallback ??= text
+      }
+      return
+    }
+    case 'function_call': {
+      const name = extractString(payload.name)
+      const callId = extractString(payload.call_id)
+      if (!name || !callId || !isCodexCollabToolRowName(name)) {
+        return
+      }
+      if (summary.collabCalls.length >= MAX_COLLAB_CALLS) {
+        return
+      }
+      const call = {
+        callId,
+        name,
+        arguments: stringifyPayloadValue(payload.arguments) ?? '',
+        output: null,
+        at: timestamp
+      }
+      callsById.set(callId, call)
+      summary.collabCalls.push(call)
+      return
+    }
+    case 'function_call_output': {
+      const callId = extractString(payload.call_id)
+      const call = callId ? callsById.get(callId) : undefined
+      if (call) {
+        call.output = stringifyPayloadValue(payload.output)
       }
       break
     }
