@@ -13,6 +13,7 @@ import {
   lastAssistantPreview,
   type AgentGraphAccumulator
 } from './agent-graph-accumulator'
+import { addClaudeSpawnCallNodes } from './agent-graph-claude-spawn-calls'
 import { addClaudeWorkflowNodes } from './agent-graph-claude-workflows'
 import {
   parseClaudeTranscript,
@@ -68,22 +69,28 @@ export async function addClaudeChildNodes(
     return
   }
   const entries = await readSubagentDirNames(args.parentPath)
-  if (entries.length === 0) {
-    return
-  }
   const links = await readClaudeParentLinks(args.parentPath)
-  const listed = await listClaudeSubagentSessions({
-    parentFilePath: args.parentPath,
-    statusByAgentId: links.statusByTaskId,
-    parseTranscript: parseClaudeTranscriptCached
-  })
+  const listed =
+    entries.length === 0
+      ? { sessions: [], issues: [] }
+      : await listClaudeSubagentSessions({
+          parentFilePath: args.parentPath,
+          statusByAgentId: links.statusByTaskId,
+          parseTranscript: parseClaudeTranscriptCached
+        })
   acc.addScanIssues(listed.issues)
   const added: AiVaultSession[] = []
+  const representedToolUseIds = new Set<string>()
   for (const session of oldestFirst(listed.sessions)) {
-    if (await addClaudeSubagentNode(acc, { ...args, session, links })) {
+    const toolUseId = await addClaudeSubagentNode(acc, { ...args, session, links })
+    if (toolUseId !== null) {
       added.push(session)
+      if (toolUseId) {
+        representedToolUseIds.add(toolUseId)
+      }
     }
   }
+  addClaudeSpawnCallNodes(acc, { ...args, links, representedToolUseIds })
   if (entries.includes(CLAUDE_WORKFLOWS_DIR_NAME)) {
     await addClaudeWorkflowNodes(acc, {
       ...args,
@@ -108,7 +115,7 @@ async function addClaudeSubagentNode(
     session: AiVaultSession
     links: ClaudeSubagentParentLinks
   }
-): Promise<boolean> {
+): Promise<string | null> {
   const { session, links } = args
   const agentId = claudeAgentIdFromPath(session.filePath)
   const outcome = links.outcomesByAgentId.get(agentId)
@@ -129,7 +136,7 @@ async function addClaudeSubagentNode(
     depth: args.depth
   })
   if (!node) {
-    return false
+    return null
   }
   acc.addEdge({
     from: args.parentNodeId,
@@ -165,7 +172,8 @@ async function addClaudeSubagentNode(
       at: notification?.at ?? outcome?.at ?? session.updatedAt
     })
   }
-  return true
+  // Empty string: node added but no spawn call id to dedupe against.
+  return toolUseId ?? ''
 }
 
 /** Missing dirs mean no children; skip the full parent read in that common case. */
