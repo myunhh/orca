@@ -22,12 +22,14 @@ Move terminals, Markdown files and images into separate windows, the way Chrome 
 - **Live terminals**: terminals in a workbench window are fully interactive. The main window still owns every process and every saved layout, so no terminal is ever killed when it moves between windows.
 
 **Limitations**
+
 - Markdown and image tabs are read-only in a workbench window. Use **Reload** to pick up changes on disk.
 - Agent tabs opened in the chat view cannot be detached. Agents running in a terminal can.
 - Workbench windows are not restored after a restart. Their tabs reopen in the main window.
 - Not available in paired web clients.
 
 **Key files**
+
 - Main process: `src/main/window/workbench-windows.ts`, `src/main/window/companion-window-chrome.ts`, `src/main/ipc/workbench-windows.ts`, `src/main/ipc/workbench-window-payload-validation.ts`, `src/main/ipc/companion-window-handlers.ts`
 - Preload: `src/preload/api/workbench-windows-api.ts`, `src/preload/api/workbench-windows-bridge.ts`
 - Window entry: `src/renderer/workbench.html`, `src/renderer/src/workbench.tsx`, `electron.vite.config.ts`
@@ -50,9 +52,11 @@ See which agents your main agent called, which model each one ran on, and what t
 - The graph refreshes every 5 seconds while it is visible and is built in a background process.
 
 **Limitations**
+
 - Only sessions on the local machine are supported. Sessions on remote hosts, including SSH hosts, are not.
 
 **Key files**
+
 - Builders: `src/main/ai-vault/agent-graph/` (one file set each for Claude, Codex and OMP)
 - IPC: `src/main/ipc/ai-vault/agent-graph-ipc.ts`, `agent-graph-build-requests.ts`, `agent-graph-transcript-admission.ts`
 - Background process: `src/main/ai-vault/scan-service/` (graph client and `agentGraph` operation)
@@ -80,10 +84,12 @@ Let one terminal's agent see and act on what another terminal is doing.
   - the pane headers in a workbench window's Split View, which preselect the other pane as the target
 
 **Limitations**
+
 - Summaries run the `claude` or `codex` CLI on your machine, which must be installed and logged in.
 - **Link with Terminal…** only offers partner terminals on the same host as the source.
 
 **Key files**
+
 - Summary generation: `src/main/text-generation/terminal-context-summary-*.ts`, `src/shared/terminal-context-share/`
 - IPC and preload: `src/main/ipc/terminal-context-share-handlers.ts`, `src/preload/api/terminal-context-share-bridge.ts`
 - Dialogs and menus: `src/renderer/src/components/terminal-context-share/`, `src/renderer/src/components/cmd-j/`
