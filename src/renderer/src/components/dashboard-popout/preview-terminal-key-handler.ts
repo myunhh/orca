@@ -23,6 +23,8 @@ export function installPreviewTerminalKeyHandler(args: {
   pasteClipboardText: (activeElement: Element | null, source: 'keyboard') => void
   sendInput: (data: string) => void
   requestClose?: () => void
+  /** Only surfaces that can ask the pane's owner to split pass this; others swallow the chord. */
+  requestSplit?: (direction: 'vertical' | 'horizontal') => void
   /** Everything but optionKeyLocations, which this installer tracks itself. */
   getShortcutContext: () => Omit<PreviewShortcutContext, 'optionKeyLocations'>
 }): () => void {
@@ -196,6 +198,11 @@ export function installPreviewTerminalKeyHandler(args: {
       case 'closeActivePane':
         args.requestClose?.()
         return consumeEvent(event)
+      case 'splitActivePane':
+        if (!event.repeat) {
+          args.requestSplit?.(action.direction)
+        }
+        return consumeEvent(event)
       // Swallow pane-only actions rather than encoding shell bytes such as Ctrl+D; list each so new actions require explicit classification.
       case 'clearActivePane':
       case 'clearPaneTitle':
@@ -203,7 +210,6 @@ export function installPreviewTerminalKeyHandler(args: {
       case 'equalizePaneSizes':
       case 'focusPane':
       case 'setTitle':
-      case 'splitActivePane':
       case 'toggleExpandActivePane':
       case 'toggleSearch':
         return consumeEvent(event)

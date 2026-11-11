@@ -17,6 +17,7 @@ import { findTerminalTabRow } from '../workbench-tab-label'
 import { assignTabsToWorkbenchWindow } from '../workbench-tab-move'
 import { countWorkbenchWindowTabs } from '../workbench-window-summaries'
 import { readWorkbenchEditorContent } from './workbench-editor-content-read'
+import { routeRuntimeTerminalSplitRequest } from '@/hooks/ipc-events/terminal-ui-routing-ipc-bridge'
 
 // The host's frame lands shortly after creation resolves; adopting later could take a user's own new tab.
 const REMOTE_TERMINAL_ADOPT_GRACE_MS = 5_000
@@ -239,6 +240,22 @@ export function handleWorkbenchCommand({ windowId, command }: WorkbenchRelayedCo
         dispatchWorkspaceTabCommand({
           type: 'close',
           target: { kind: 'tab', worktreeId: tab.worktreeId, tabId: tab.id }
+        })
+      }
+      return
+    }
+    case 'splitTerminalPane': {
+      const tab = findUnifiedTab(state, command.tabId)
+      const terminalTab = tab ? findTerminalTabRow(state, tab) : null
+      if (tab && terminalTab) {
+        // Same path as `orca terminal split`: it mounts the pane in the background when needed.
+        routeRuntimeTerminalSplitRequest({
+          tabId: terminalTab.id,
+          worktreeId: tab.worktreeId,
+          paneRuntimeId: -1,
+          sourceLeafId: command.leafId,
+          direction: command.direction,
+          telemetrySource: 'command'
         })
       }
       return

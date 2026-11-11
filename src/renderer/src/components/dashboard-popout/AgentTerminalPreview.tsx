@@ -52,6 +52,7 @@ export function AgentTerminalPreview({
   terminalInput = null,
   className,
   onRequestClose,
+  onRequestSplit,
   linkSource,
   onBrowserForeground
 }: {
@@ -60,6 +61,8 @@ export function AgentTerminalPreview({
   terminalInput?: DashboardCardTerminalInput | null
   className?: string
   onRequestClose?: () => void
+  /** Ask the pane's owner to split it; without it the split chord does nothing. */
+  onRequestSplit?: (direction: 'vertical' | 'horizontal') => void
   linkSource?: DashboardPreviewLinkSource
   onBrowserForeground?: () => void
 }): React.JSX.Element {
@@ -76,6 +79,7 @@ export function AgentTerminalPreview({
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
   const onRequestCloseRef = useRef(onRequestClose)
+  const onRequestSplitRef = useRef(onRequestSplit)
   const { terminalTheme: composedTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
@@ -99,7 +103,16 @@ export function AgentTerminalPreview({
     macOptionAsAltRef.current = macOptionAsAlt
     terminalInputRef.current = terminalInput
     onRequestCloseRef.current = onRequestClose
-  }, [settings, macOptionAsAlt, terminalInput, onRequestClose, linkSource, onBrowserForeground])
+    onRequestSplitRef.current = onRequestSplit
+  }, [
+    settings,
+    macOptionAsAlt,
+    terminalInput,
+    onRequestClose,
+    onRequestSplit,
+    linkSource,
+    onBrowserForeground
+  ])
 
   // Font changes retain the replay-driven fit, grid claim and input-owner reset.
   useEffect(() => {
@@ -222,7 +235,8 @@ export function AgentTerminalPreview({
           getSettings: () => settingsRef.current,
           getMacOptionAsAlt: () => macOptionAsAltRef.current,
           getTerminalInput: () => terminalInputRef.current,
-          requestClose: () => onRequestCloseRef.current?.()
+          requestClose: () => onRequestCloseRef.current?.(),
+          requestSplit: (direction) => onRequestSplitRef.current?.(direction)
         })
         if (!standalone) {
           return

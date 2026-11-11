@@ -49,6 +49,7 @@ Move terminals, Markdown files and images into separate windows, the way Chrome 
   - **+** opens a new terminal in the workspace of the active tab.
   - **Add Existing Tab…** pulls in a terminal, Markdown tab or image tab that is open in the main window.
 - **Split View**: show two tabs side by side in the same window.
+- **Split terminals**: split a terminal into panes inside a workbench window, the same as in the main window. Hover a pane and use its **Split Terminal Right** / **Split Terminal Down** buttons, or press the main window's split shortcuts while the pane is focused.
 - **Return to Main Window**: send a tab back. Closing a workbench window returns all of its tabs to the main window, and their terminals keep running.
 - **Live terminals**: terminals in a workbench window are fully interactive. The main window still owns every process and every saved layout, so no terminal is ever killed when it moves between windows.
 

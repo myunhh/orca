@@ -34,7 +34,7 @@ const WINDOW_ORDINAL = readWindowOrdinal()
 
 function WorkbenchTabBody({ tab }: { tab: WorkbenchTabView }): React.JSX.Element | null {
   if (tab.kind === 'terminal' && tab.terminal) {
-    return <WorkbenchTerminalBody terminal={tab.terminal} />
+    return <WorkbenchTerminalBody tabId={tab.tabId} terminal={tab.terminal} />
   }
   return <WorkbenchEditorBody tab={tab} />
 }

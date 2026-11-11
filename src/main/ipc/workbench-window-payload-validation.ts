@@ -167,6 +167,17 @@ export function admitWorkbenchCommand(value: unknown): WorkbenchCommand | null {
       return isId(value.tabId) && isId(value.requestId)
         ? { kind: 'readEditorFile', tabId: value.tabId, requestId: value.requestId }
         : null
+    case 'splitTerminalPane':
+      return isId(value.tabId) &&
+        isId(value.leafId) &&
+        (value.direction === 'vertical' || value.direction === 'horizontal')
+        ? {
+            kind: 'splitTerminalPane',
+            tabId: value.tabId,
+            leafId: value.leafId,
+            direction: value.direction
+          }
+        : null
     default:
       return null
   }

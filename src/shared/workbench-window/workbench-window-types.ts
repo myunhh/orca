@@ -68,6 +68,9 @@ export type WorkbenchSnapshot = {
   generatedAt: number
 }
 
+/** `vertical` puts the new pane to the right, `horizontal` below, as in the main window. */
+export type WorkbenchSplitDirection = 'vertical' | 'horizontal'
+
 export type WorkbenchCommand =
   | { kind: 'newTerminal'; worktreeId: string }
   | { kind: 'adoptTab'; tabId: string }
@@ -75,6 +78,12 @@ export type WorkbenchCommand =
   | { kind: 'closeTab'; tabId: string }
   | { kind: 'revealInMain'; tabId: string }
   | { kind: 'readEditorFile'; tabId: string; requestId: string }
+  | {
+      kind: 'splitTerminalPane'
+      tabId: string
+      leafId: string
+      direction: WorkbenchSplitDirection
+    }
 
 /** A command relayed to the main renderer, stamped by main with the sender's window. */
 export type WorkbenchRelayedCommand = { windowId: string; command: WorkbenchCommand }

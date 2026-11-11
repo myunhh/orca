@@ -34,6 +34,7 @@ export type StandaloneTerminalArgs = {
   getTerminalInput: () => DashboardCardTerminalInput | null
   linkHandlers?: PreviewTerminalLinkHandlers
   requestClose?: () => void
+  requestSplit?: (direction: 'vertical' | 'horizontal') => void
 }
 
 export type StandaloneTerminal = {
@@ -97,6 +98,7 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
     // Why: route through terminal.input so the chord's bytes carry core's user-input signal, like typed keys.
     sendInput: (data) => terminal.input(data),
     requestClose: args.requestClose,
+    requestSplit: args.requestSplit,
     getShortcutContext: () => ({
       clientPlatform: getShortcutPlatform(),
       macOptionAsAlt: args.getMacOptionAsAlt(),
