@@ -1,9 +1,7 @@
 import type React from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
-import { useAppStore } from '../../store'
-import { defaultScopeHost } from '@/lib/default-creation-host'
-import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
+import { LOCAL_ACCOUNT_OWNER } from '@/lib/wsl-host-account-owner'
 import { ClaudeSwitcherForOwner } from './ClaudeSwitcherForOwner'
 import { getProviderAccountsOwnerKey } from '@/runtime/runtime-provider-accounts-client'
 
@@ -28,14 +26,7 @@ export function ClaudeSwitcherMenu(props: ClaudeSwitcherMenuProps): React.JSX.El
   )
 }
 
+// Why: the status bar shows this device's accounts whichever SSH/remote workspace is focused.
 function FocusedClaudeSwitcher(props: ClaudeSwitcherMenuProps): React.JSX.Element | null {
-  const settings = useAppStore((s) => s.settings)
-  const owner = useActiveAccountOwner(defaultScopeHost(settings))
-  return (
-    <ClaudeSwitcherForOwner
-      key={`${getProviderAccountsOwnerKey(owner.target)}:${owner.wslHostDistro ?? ''}`}
-      {...props}
-      owner={owner}
-    />
-  )
+  return <ClaudeSwitcherForOwner {...props} owner={LOCAL_ACCOUNT_OWNER} />
 }

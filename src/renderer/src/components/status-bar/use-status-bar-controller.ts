@@ -14,16 +14,18 @@ import {
 import { useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useStatusBarDensity } from './status-bar-density'
-import { getUsageOwnerHostScope, useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
+import { getUsageOwnerHostScope, type RemoteUsageOwner } from './use-owner-usage-rate-limits'
+import { useStatusBarExtraAccounts } from './use-status-bar-extra-accounts'
 import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 import { translate } from '@/i18n/i18n'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
-  const localRateLimits = useAppStore((s) => s.rateLimits)
-  // Why: with a remote account owner the agents run there, so its usage is the one to show.
-  const { rateLimits, remoteOwner, refreshRemote } = useOwnerUsageRateLimits(localRateLimits)
-  const remoteOwned = remoteOwner !== null
+  // Why: show the accounts signed in on this device whichever SSH/remote workspace is focused.
+  const rateLimits = useAppStore((s) => s.rateLimits)
+  const remoteOwner: RemoteUsageOwner | null = null
+  const remoteOwned = false
+  const extraAccounts = useStatusBarExtraAccounts()
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -92,7 +94,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     try {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
       await Promise.all([
-        (refreshRemote ?? refreshRateLimits)(),
+        refreshRateLimits(),
         refreshDetectedAgents(undefined, { wakeWslDistro: true })
       ])
     } finally {
@@ -100,7 +102,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRemote, refreshRateLimits, refreshDetectedAgents])
+  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
 
   if (!statusBarVisible) {
     return null
@@ -278,6 +280,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     collapsedUsageProviders,
     compact,
     detectedAgentIds,
+    extraAccounts,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
     handleManageAccounts,

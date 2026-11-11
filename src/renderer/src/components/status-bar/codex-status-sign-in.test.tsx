@@ -9,7 +9,6 @@ import type {
   CodexRateLimitAccountsState
 } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const markLiveCodexSessionsForRestart = vi.fn(async () => {})
 const toastSuccess = vi.fn()
@@ -19,7 +18,6 @@ const fetchSettings = vi.fn(async () => {})
 const reauthenticate = vi.fn(async (_args: unknown) => codexSnapshot(null))
 
 let storeSettings: GlobalSettings
-let accountOwner: RuntimeClientTarget
 let inactiveError: string
 
 function codexAccount(id: string, updatedAt: number): CodexManagedAccountSummary {
@@ -87,11 +85,6 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
   })),
   selectCodexProviderAccount: vi.fn(async () => codexSnapshot(null)),
   selectClaudeProviderAccount: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
-}))
-
-vi.mock('@/runtime/use-worktree-runtime-target', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  useActiveAccountOwner: () => ({ target: accountOwner, wslHostDistro: null })
 }))
 
 vi.mock('@/lib/windows-terminal-capabilities', () => ({
@@ -200,7 +193,6 @@ describe('status bar Codex sign-in action', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     storeSettings = settingsWithActive(null)
-    accountOwner = { kind: 'local' }
     inactiveError = 'Not signed in'
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -223,17 +215,6 @@ describe('status bar Codex sign-in action', () => {
       expect(within(activeRow).getByText('11% used wk')).toBeTruthy()
     }
   )
-
-  it("keeps a remote owner's usage off rows picked by this desktop's runtime target", async () => {
-    accountOwner = { kind: 'environment', environmentId: 'remote-1' }
-    const { CodexSwitcherMenu } = await import('./StatusBar')
-    render(
-      React.createElement(CodexSwitcherMenu, { codex: liveUsage, compact: false, iconOnly: false })
-    )
-
-    const activeRow = await screen.findByRole('menuitem', { name: /Active/ })
-    expect(within(activeRow).queryByText('11% used wk')).toBeNull()
-  })
 
   it.each([null, 'Enterprise'])(
     'selects the exact same-email account when workspace labels collide: %s',

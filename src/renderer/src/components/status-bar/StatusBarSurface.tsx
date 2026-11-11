@@ -76,6 +76,7 @@ export function StatusBarSurface({
     collapseUsage,
     collapsedUsageProviders,
     compact,
+    extraAccounts,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
     handleManageAccounts,
@@ -170,14 +171,42 @@ export function StatusBarSurface({
                         data-usage-percentage={usageChipShowsPercentage(p, usageMode)}
                         data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
                         aria-hidden={collapsedUsageProviders.includes(p.provider)}
-                        className="inline-flex data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+                        className="inline-flex items-center gap-3 data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
                       >
-                        <ProviderSegment
-                          p={p}
-                          compact={compact}
-                          display={usagePercentageDisplay}
-                          mode={usageMode}
-                        />
+                        <span
+                          title={extraAccounts[p.provider]?.active?.email}
+                          className="inline-flex items-center gap-1"
+                        >
+                          {extraAccounts[p.provider]?.active ? (
+                            <span className="max-w-20 truncate text-muted-foreground">
+                              {extraAccounts[p.provider]?.active?.label}
+                            </span>
+                          ) : null}
+                          <ProviderSegment
+                            p={p}
+                            compact={compact}
+                            display={usagePercentageDisplay}
+                            mode={usageMode}
+                          />
+                        </span>
+                        {extraAccounts[p.provider]?.others.map((account) => (
+                          <span
+                            key={account.accountId}
+                            data-usage-account={account.accountId}
+                            title={account.email}
+                            className="inline-flex items-center gap-1"
+                          >
+                            <span className="max-w-20 truncate text-muted-foreground">
+                              {account.label}
+                            </span>
+                            <ProviderSegment
+                              p={account.rateLimits}
+                              compact={compact}
+                              display={usagePercentageDisplay}
+                              mode={usageMode}
+                            />
+                          </span>
+                        ))}
                       </span>
                     ))}
                     {collapseUsage ? (

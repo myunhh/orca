@@ -16,6 +16,9 @@ export type AccountOwner = {
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
+/** This desktop as the owner of its own signed-in provider accounts. */
+export const LOCAL_ACCOUNT_OWNER: AccountOwner = { target: LOCAL_TARGET, wslHostDistro: null }
+
 /** The distro behind a WSL host target; null for any other target. */
 export function wslHostDistroForTarget(
   target: RuntimeClientTarget,

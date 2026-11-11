@@ -1,6 +1,6 @@
 # Orca Customizations
 
-This fork adds three features to Orca: detached workbench windows, an agent graph, and cross-terminal context sharing.
+This fork adds four features to Orca: detached workbench windows, an agent graph, cross-terminal context sharing, and a usage bar that shows every local account.
 
 All changes sit on top of upstream commit `aefcdd99` and live in the commit range `aefcdd99..76cda768`. To carry them onto another base, apply that range:
 
@@ -112,3 +112,22 @@ Let one terminal's agent see and act on what another terminal is doing.
 - IPC and preload: `src/main/ipc/terminal-context-share-handlers.ts`, `src/preload/api/terminal-context-share-bridge.ts`
 - Dialogs and menus: `src/renderer/src/components/terminal-context-share/`, `src/renderer/src/components/cmd-j/`
 - Split-view buttons: `src/renderer/src/components/workbench-window/WorkbenchTerminalShareActions.tsx`
+
+## 4. Usage Bar for Every Local Account
+
+The status-bar usage meters always show the accounts signed in on this computer.
+
+- **SSH and remote workspaces**: focusing a workspace on an SSH or remote host no longer swaps the bar to that host's usage or to "not set up on host" placeholders. The bar keeps showing your local accounts, and the Claude/Codex account switchers in the bar act on this computer's accounts.
+- **Several accounts per provider**: when more than one Claude or Codex account is signed in, each account gets its own meter next to the provider's chip, labeled with the part of its email before `@` (hover for the full address). Their usage refreshes every 5 minutes.
+
+**Limitations**
+
+- Extra-account meters cover Claude and Codex, the providers Orca can hold several accounts for.
+- An account appears once Orca has read its usage at least once.
+
+**Key files**
+
+- `src/renderer/src/components/status-bar/use-status-bar-controller.ts`
+- `src/renderer/src/components/status-bar/use-status-bar-extra-accounts.ts`
+- `src/renderer/src/components/status-bar/StatusBarSurface.tsx`
+- `src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx`, `use-codex-switcher-controller.ts`
