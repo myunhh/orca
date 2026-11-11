@@ -8,7 +8,7 @@ import { findOrcadMigrationSourceCutoverForTarget } from '../../ssh/orcad-migrat
 import { abandonOrcadConversion } from '../../ssh/orcad-conversion-abandon'
 import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'
 import { enableMovedOrcadAutomationsForTarget } from '../../ssh/orcad-migration-moved-automations'
-import { hasOrcadTemplate } from '../../orcad/orcad-artifact-materializer'
+import { hasOrcadTemplate, orcadTemplateFingerprint } from '../../orcad/orcad-artifact-materializer'
 import { isOrcadHostUnavailableFixableOnHost } from '../../orcad/orcad-host-unavailable'
 import { managedServerUpdateDeps } from '../../ssh/managed-server-update-deps'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
@@ -44,7 +44,9 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
   const registry = getSshTargetRegistryStore()!
   const claims = registry.getOrcadRuntimeClaims()
   const store = registry.getOrcadMigrationSource()
-  const appVersion = getAppEnvironment().getVersion()
+  // Why the template too: a refusal recorded before a server template was added must be reprobed.
+  const refusalVersion = (): string =>
+    `${getAppEnvironment().getVersion()}+template.${orcadTemplateFingerprint()}`
   const isRegistered = (environmentId: string): boolean =>
     listEnvironments(userDataPath).some((entry) => entry.id === environmentId)
   return {
@@ -76,13 +78,23 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         : 0
     },
     hasTemplate: hasOrcadTemplate,
-    recordedUnavailable: (target) =>
-      target.managedServerUnavailable?.appVersion === appVersion
-        ? target.managedServerUnavailable.reason
-        : null,
+    recordedUnavailable: (target) => {
+      const recorded = target.managedServerUnavailable
+      if (!recorded) {
+        return null
+      }
+      if (recorded.appVersion === refusalVersion()) {
+        return recorded.reason
+      }
+      // Why: a stale refusal would keep showing in Settings after this build can serve the host.
+      registry.updateTarget(target.id, { managedServerUnavailable: undefined })
+      return null
+    },
     recordUnavailable: (target, reason) => {
       if (!isOrcadHostUnavailableFixableOnHost(reason)) {
-        registry.updateTarget(target.id, { managedServerUnavailable: { reason, appVersion } })
+        registry.updateTarget(target.id, {
+          managedServerUnavailable: { reason, appVersion: refusalVersion() }
+        })
       }
     },
     ...managedServerUpdateDeps(userDataPath),

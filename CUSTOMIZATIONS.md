@@ -26,6 +26,19 @@ It adds the `upstream` remote on first use, tags a backup, merges `upstream/main
 - Skip the typecheck: add `--skip-checks`
 - Afterwards run `pnpm install` and rebuild or restart `pnpm dev`
 
+## SSH hosts: getting the server template
+
+To work on an SSH host, Orca installs its own server there from a server template bundled with the app. Release builds include it. Builds of this fork made with `pnpm dev` or a local packaging run do not, so connecting to an SSH host shows **"This host isn't supported by this version of Orca"**. Building the template needs node-pty compiled on Linux, macOS and Windows, so it is made on GitHub Actions and downloaded once:
+
+```bash
+node fork-maintenance/fetch-orcad-template.mjs --build
+```
+
+This starts the template build on your fork's Actions (about 30-60 minutes), then puts the result in `out/orcad-template`. It needs the GitHub CLI signed in (`gh auth login`) and Actions enabled on the fork. Afterwards restart `pnpm dev` or rebuild the app, then reconnect the host; Orca retries hosts it gave up on while the template was missing.
+
+- Without `--build`, the script downloads the newest template your fork's Actions already built. Templates stay downloadable for 7 days.
+- Fetch the template again after syncing upstream, because the server code changes with it.
+
 ## 1. Detached Workbench Windows
 
 Move terminals, Markdown files and images into separate windows, the way Chrome lets you drag a tab out into its own window.

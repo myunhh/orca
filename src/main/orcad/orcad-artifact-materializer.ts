@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { createHash, randomUUID } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -299,6 +299,20 @@ export function getOrcadTemplateCandidates(): string[] {
 
 export function hasOrcadTemplate(): boolean {
   return getOrcadTemplateCandidates().some((candidate) => existsSync(candidate))
+}
+
+/** Identity of the template this app would deploy; a dev build keeps its version across rebuilds. */
+export function orcadTemplateFingerprint(): string {
+  const found = getOrcadTemplateCandidates().find((candidate) => existsSync(candidate))
+  if (!found) {
+    return 'none'
+  }
+  try {
+    const manifest = readFileSync(join(found, ORCAD_TEMPLATE_MANIFEST_FILENAME))
+    return createHash('sha256').update(manifest).digest('hex').slice(0, 16)
+  } catch {
+    return 'unreadable'
+  }
 }
 
 function resolveOrcadTemplateDir(): string {

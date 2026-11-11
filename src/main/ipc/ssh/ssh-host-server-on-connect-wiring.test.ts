@@ -40,7 +40,10 @@ vi.mock('../../managed-server/lifecycle/orcad-runtime-conversion', () => ({
 vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', () => ({
   ensureOrcadManagedTunnel: mocks.tunnel
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () => true }))
+vi.mock('../../orcad/orcad-artifact-materializer', () => ({
+  hasOrcadTemplate: () => true,
+  orcadTemplateFingerprint: () => 'abc'
+}))
 vi.mock('./ssh-renderer-broadcast', () => ({ broadcastSshState: mocks.broadcast }))
 vi.mock('./ssh-ipc-context', () => ({ getCurrentMainWindow: () => null }))
 vi.mock('./ssh-session-teardown', () => ({ disconnectRegisteredSshTarget: vi.fn() }))
@@ -98,7 +101,7 @@ describe('connect-time server decision against the real profile', () => {
     expect(target().orcadFence).toBeUndefined()
     expect(target().managedServerUnavailable).toEqual({
       reason: 'unsupported_host',
-      appVersion: '1.5.0'
+      appVersion: '1.5.0+template.abc'
     })
     expect(allowsDirectSshRelay(target())).toBe(true)
 
@@ -165,6 +168,18 @@ describe('connect-time server decision against the real profile', () => {
       managedServerUnavailable: { reason: 'unsupported_host', appVersion: '1.4.0' }
     })
     expect(deps.recordedUnavailable(target())).toBeNull()
+  })
+
+  it('retries a host refused before this build had a server template', async () => {
+    const deps = hostServerOnConnectDeps(userDataPath)
+    store.updateSshTarget(TARGET.id, {
+      managedServerUnavailable: {
+        reason: 'artifacts_unavailable',
+        appVersion: '1.5.0+template.none'
+      }
+    })
+    expect(deps.recordedUnavailable(target())).toBeNull()
+    expect(target().managedServerUnavailable).toBeUndefined()
   })
 
   // COMPAT(legacy-relay-bridge): the terminal is left running and the bridge serves its pane.
