@@ -2,7 +2,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import type { RuntimeTerminalRead } from '../../../../shared/runtime-terminal-contracts'
 import { TERMINAL_CONTEXT_READ_LINE_LIMIT } from '../../../../shared/terminal-context-share/terminal-context-share-types'
 import { normalizeTerminalContextLines } from '../../../../shared/terminal-context-share/terminal-context-summary-prompt'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 export type TerminalContextReadMode = 'summary' | 'raw'
 

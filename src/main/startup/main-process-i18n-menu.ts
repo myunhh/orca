@@ -8,7 +8,7 @@ import {
 import { zoomDashboardPopoutIfFocused } from '../window/dashboard-popout-window'
 import { zoomWorkspaceSpaceWindowIfFocused } from '../window/workspace-space-window'
 import { zoomWorkbenchWindowIfFocused } from '../window/workbench-windows'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { mainProcessState as state } from './main-process-state'
 import {
   getAppMenuQuitHandlers,
@@ -20,7 +20,7 @@ import {
 } from './main-window-actions'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 
 // Zoom the focused companion rather than changing the main window behind it.
 function zoomCompanionWindowIfFocused(direction: 'in' | 'out' | 'reset'): boolean {

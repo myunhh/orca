@@ -11,7 +11,7 @@ import type {
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { agentHookServer } from '../../agent-hooks/server'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { readAgentGraphNodeMessages } from '../../ai-vault/agent-graph/agent-graph-node-messages'
 import { errorMessage } from '../../ai-vault/session-scanner-values'
 import {

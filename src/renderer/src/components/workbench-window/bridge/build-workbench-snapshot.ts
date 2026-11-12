@@ -22,9 +22,8 @@ import { resolveUnifiedTabLabel } from '../../../../../shared/tab-title-resoluti
 import { isImageDropPath } from '../../../../../shared/image-path-paste'
 import { resolveDashboardCardTerminalInput } from '@/components/dashboard/dashboard-card-terminal-input'
 import { readDashboardClientHost } from '@/components/dashboard/dashboard-client-host'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findUnifiedTab, isWorkbenchViewableFile } from '../workbench-tab-eligibility'
 import {
   findTerminalTabRow,
@@ -126,7 +125,7 @@ function buildTabView(state: AppState, unifiedTabId: string): WorkbenchTabView |
     if (!terminalTab) {
       return null
     }
-    const worktreePath = findWorktreeById(selectWorktreesByRepo(state), tab.worktreeId)?.path ?? ''
+    const worktreePath = findWorktreeById(state, tab.worktreeId)?.path ?? ''
     return {
       ...common,
       label: workbenchTerminalTabLabel(state, tab, terminalTab),

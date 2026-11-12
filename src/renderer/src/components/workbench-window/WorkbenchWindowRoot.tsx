@@ -9,8 +9,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { useAppMenuPaste } from '@/hooks/useAppMenuPaste'
-import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
+import { useAppMenuPaste } from '@/hooks/clipboard/menu/useAppMenuPaste'
+import { useAppMenuSelectionActions } from '@/hooks/app-commands/useAppMenuSelectionActions'
 import { translate } from '@/i18n/i18n'
 import type {
   WorkbenchAdoptableTab,

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { applyDocumentTheme } from '@/lib/document-theme'
-import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
+import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
 import { useAppStore } from '@/store'
 import { useReduceVisualEffects } from '@/hooks/use-reduce-visual-effects'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'

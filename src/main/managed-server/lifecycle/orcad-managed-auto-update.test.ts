@@ -1,42 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   emptyOrcadActivationRecord,
   type OrcadActivationRecord
 } from '../activation/orcad-activation-record'
-
-const mocks = vi.hoisted(() => {
-  const state: { record: OrcadActivationRecord | null } = { record: null }
-  return {
-    state,
-    materialize: vi.fn(async (_target: string) => '/cache/orcad'),
-    runUpdate: vi.fn(),
-    migrating: vi.fn((_userData: string, _environmentId: string): unknown => null)
-  }
-})
-
-vi.mock('../../ssh/orcad-runtime-maintenance', () => ({
-  withManagedOrcadLifecycle: (
-    _userData: string,
-    _selector: string,
-    run: (managed: unknown) => Promise<unknown>
-  ) => run({ environment: { id: 'env-1' }, deployment: {} }),
-  runManagedOrcadUpdate: mocks.runUpdate
-}))
-vi.mock('./orcad-managed-runtime-context', () => ({
-  resolveLinkedOrcadContext: async () => ({
-    activationRecord: mocks.state.record,
-    serverTarget: 'linux-x64'
-  })
-}))
-vi.mock('./orcad-managed-migration-status', () => ({
-  findIncompleteManagedOrcadMigration: mocks.migrating
-}))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({
-  materializeOrcadArtifact: mocks.materialize
-}))
-vi.mock('../install/remote-versioned-install', () => ({
-  readLocalFullVersion: () => '0.1.0+new'
-}))
 
 import { planManagedOrcadAutoUpdate } from './orcad-managed-update-decision'
 

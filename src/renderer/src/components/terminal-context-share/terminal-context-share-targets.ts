@@ -4,7 +4,7 @@ import type {
   RuntimeTerminalSummary
 } from '../../../../shared/runtime-terminal-contracts'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 export type TerminalContextShareTarget = {
   key: string

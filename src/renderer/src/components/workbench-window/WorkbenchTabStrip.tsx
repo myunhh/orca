@@ -13,7 +13,7 @@ import {
   getTabRootStateClasses
 } from '@/components/tab-bar/drop-indicator'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   WorkbenchAdoptableTab,
   WorkbenchTabView

@@ -1,6 +1,6 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { sendPromptWithGuardedPasteAndEnter } from '@/lib/active-agent-note-send-delivery'
-import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
+import { sendPromptWithGuardedPasteAndEnter } from '@/lib/agent-session/messaging/terminal/active-agent-note-send-delivery'
+import { activeAgentNotesSendFailureMessage } from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
 
 export type TerminalContextDeliveryResult = { ok: true } | { ok: false; message: string }
 

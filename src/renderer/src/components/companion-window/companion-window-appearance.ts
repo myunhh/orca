@@ -1,7 +1,7 @@
-import { applyDocumentTheme } from '@/lib/document-theme'
-import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
-import { buildAppFontFamily } from '@/lib/app-font-family'
-import { applyCodeFontSmoothing } from '@/lib/code-font-smoothing'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
+import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
+import { buildAppFontFamily } from '@/app-shell/appearance/app-font-family'
+import { applyCodeFontSmoothing } from '@/lib/editor/appearance/code-font-smoothing'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 

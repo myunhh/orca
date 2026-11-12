@@ -8,6 +8,10 @@ import type {
   AiVaultDeleteSessionResult
 } from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import type {
+  AiVaultSessionHandoffArgs,
+  AiVaultSessionHandoffResult
+} from '../../shared/ai-vault/contracts/ai-vault-session-handoff'
+import type {
   AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult,
   AiVaultListArgs,
@@ -56,6 +60,8 @@ export type AiVaultApi = {
   prepareSessionResume: (
     args: AiVaultPrepareSessionResumeRequest
   ) => Promise<AiVaultPrepareSessionResumeResult>
+  /** Saves a database-backed session's full conversation on its own host for a hand-off. */
+  prepareSessionHandoff: (args: AiVaultSessionHandoffArgs) => Promise<AiVaultSessionHandoffResult>
   listSubagentSessions: (args: AiVaultSubagentListArgs) => Promise<AiVaultSubagentListResult>
   getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) => Promise<AiVaultFirstUserPromptResult>
   /** Local transcripts only; main resolves the pane's session from hook identity. */

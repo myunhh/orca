@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { Tab } from '../../../../shared/tab-types'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { isImageDropPath } from '../../../../shared/image-path-paste'
 
 type EligibilityState = Pick<AppState, 'unifiedTabsByWorktree' | 'openFiles'>

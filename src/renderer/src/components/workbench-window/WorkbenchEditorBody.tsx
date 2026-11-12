@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import ImageViewer from '@/components/editor/ImageViewer'
 import MarkdownPreview from '@/components/editor/markdown-preview/surface/MarkdownPreview'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type {
   WorkbenchEditorContent,
   WorkbenchTabView

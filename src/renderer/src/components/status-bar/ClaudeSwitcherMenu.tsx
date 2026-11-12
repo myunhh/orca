@@ -1,9 +1,9 @@
 import type React from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
-import { LOCAL_ACCOUNT_OWNER } from '@/lib/wsl-host-account-owner'
+import { LOCAL_ACCOUNT_OWNER } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { ClaudeSwitcherForOwner } from './ClaudeSwitcherForOwner'
-import { getProviderAccountsOwnerKey } from '@/runtime/runtime-provider-accounts-client'
+import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 export type ClaudeSwitcherMenuProps = {
   claude: ProviderRateLimits | null

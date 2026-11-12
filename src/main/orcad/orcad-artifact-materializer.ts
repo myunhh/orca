@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -23,6 +23,7 @@ import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../shared/nod
 import { findOrcadCachePath } from '../node-runtime/orcad-cache-path'
 import type { PinnedRuntimeMaterializeOptions } from '../node-runtime/pinned-runtime-materializer'
 import { readOrcadArtifactVerificationRecord } from './orcad-artifact-verification-record'
+import { orcadArtifactSlotName } from './orcad-artifact-slot-name'
 import {
   isCompleteArtifact,
   rememberVerification,
@@ -104,7 +105,7 @@ export async function assembleOrcadArtifact(args: {
       : null
   let slotFromRecord = false
   const cached = await findOrcadCachePath(
-    (attempt) => join(targetRoot, `${fullVersion}${attempt ? `.repair-${attempt}` : ''}`),
+    (attempt) => join(targetRoot, orcadArtifactSlotName(fullVersion, attempt)),
     async (path) => {
       slotFromRecord = await slotMatchesRecord(path, fullVersion, sources, recordedSlot, nowMs)
       return slotFromRecord || isCompleteArtifact(path, fullVersion, sources, sourceHashes)
@@ -299,20 +300,6 @@ export function getOrcadTemplateCandidates(): string[] {
 
 export function hasOrcadTemplate(): boolean {
   return getOrcadTemplateCandidates().some((candidate) => existsSync(candidate))
-}
-
-/** Identity of the template this app would deploy; a dev build keeps its version across rebuilds. */
-export function orcadTemplateFingerprint(): string {
-  const found = getOrcadTemplateCandidates().find((candidate) => existsSync(candidate))
-  if (!found) {
-    return 'none'
-  }
-  try {
-    const manifest = readFileSync(join(found, ORCAD_TEMPLATE_MANIFEST_FILENAME))
-    return createHash('sha256').update(manifest).digest('hex').slice(0, 16)
-  } catch {
-    return 'unreadable'
-  }
 }
 
 function resolveOrcadTemplateDir(): string {

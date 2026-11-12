@@ -5,7 +5,7 @@ import type {
   AgentGraphNode
 } from '../../../../shared/agent-graph/agent-graph-types'
 import { formatSubagentTokens } from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { AgentStateDot } from '../AgentStateDot'
 import { agentGraphEdgeKindLabel, agentGraphStatusDotState } from './agent-graph-copy'

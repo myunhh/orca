@@ -3,7 +3,7 @@ import type { Tab } from '../../../../../shared/tab-types'
 import type { WorkbenchAdoptableTab } from '../../../../../shared/workbench-window/workbench-window-types'
 import { WORKBENCH_MAX_ADOPTABLE_TABS } from '../../../../../shared/workbench-window/workbench-window-types'
 import { isImageDropPath } from '../../../../../shared/image-path-paste'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { isWorkbenchEligibleTab } from '../workbench-tab-eligibility'
 import {
   findTerminalTabRow,

@@ -4,7 +4,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
-import { getNotificationWorkspaceLabels } from '@/components/terminal-pane/terminal-notification-state'
+import { getNotificationWorkspaceLabels } from '@/attention/notification-workspace-labels'
 import {
   resolveTerminalTabActivityStatus,
   terminalTabActivityToAgentDotState

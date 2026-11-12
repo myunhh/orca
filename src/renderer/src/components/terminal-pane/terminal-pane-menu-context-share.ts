@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { TerminalPaneController } from './use-terminal-pane-controller'
+import type { TerminalPaneController } from './controller/use-terminal-pane-controller'
 import {
   openTerminalContextShareDialog,
   type TerminalContextShareKind

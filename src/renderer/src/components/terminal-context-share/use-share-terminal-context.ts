@@ -5,8 +5,8 @@ import {
   type TerminalContextSummaryModelChoice
 } from '../../../../shared/terminal-context-share/terminal-context-share-types'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { textGenerationErrorText } from '@/lib/text-generation/text-generation-error-copy'
 import {
   readTerminalContextText,
   type TerminalContextReadMode

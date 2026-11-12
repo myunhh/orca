@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
@@ -14,7 +14,7 @@ export type TabGroupWorktreeSnapshot = {
   unifiedTabs: readonly Tab[]
   terminalTabs: readonly TerminalTab[]
   openFiles: TabGroupAppState['openFiles']
-  browserTabs: readonly BrowserTabState[]
+  browserTabs: readonly BrowserWorkspace[]
   expandedPaneByTabId: TabGroupAppState['expandedPaneByTabId']
   terminalLayoutsByTabId: NonNullable<TabGroupAppState['terminalLayoutsByTabId']>
   generatedTabTitlesEnabled: boolean
@@ -24,7 +24,7 @@ export type TabGroupWorktreeSnapshot = {
 }
 
 export type GroupEditorItem = OpenFile & { tabId: string }
-export type GroupBrowserItem = BrowserTabState & { tabId: string }
+export type GroupBrowserItem = BrowserWorkspace & { tabId: string }
 export type GroupAgentSessionItem = Tab & { contentType: 'agent-session' }
 
 type TerminalTabItem = TerminalTab & { unifiedTabId: string }
@@ -92,6 +92,8 @@ export function useTabGroupItemProjections({
             defaultTitle: terminalTab?.defaultTitle,
             quickCommandLabel: terminalTab?.quickCommandLabel ?? item.quickCommandLabel ?? null,
             generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
+            // Why: the strip re-resolves this title; without the session title the first-prompt title wins.
+            aiVaultTitle: item.aiVaultTitle ?? terminalTab?.aiVaultTitle ?? null,
             customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
             color: item.color ?? terminalTab?.color ?? null,
             sortOrder: item.sortOrder,
@@ -111,9 +113,9 @@ export function useTabGroupItemProjections({
     () =>
       stripTabs
         .filter((item) => isEditorTabContentType(item.contentType))
-        .map((item) => {
+        .map((item): GroupEditorItem | null => {
           const file = openFileById.get(item.entityId)
-          return file ? { ...file, tabId: item.id } : null
+          return file ? { ...file, isPreview: item.isPreview, tabId: item.id } : null
         })
         .filter((item): item is GroupEditorItem => item !== null),
     [stripTabs, openFileById]

@@ -14,6 +14,7 @@ import {
   stepCompanionWindowZoom
 } from './companion-window-chrome'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
+import { isMacAppPasteInput } from './mac-app-paste-input'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
@@ -138,6 +139,13 @@ export function createOrFocusDashboardPopout(
   broadcastPopoutOpenChanged(true)
 
   const disposeZoom = installCompanionWindowZoom(window, store, options.getKeybindings)
+  window.webContents.on('before-input-event', (event, input) => {
+    if (isMacAppPasteInput(input)) {
+      // Kitty-mode xterm encodes Cmd+V as CSI u and consumes it, so the Edit menu accelerator never fires.
+      event.preventDefault()
+      window.webContents.send('ui:appMenuPaste')
+    }
+  })
 
   window.once('ready-to-show', () => {
     showWindowWithoutStealingFocus(window)
