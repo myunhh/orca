@@ -3,7 +3,10 @@ import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remot
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { resolveTerminalHandleForPane } from '@/components/terminal-pane/clipboard/terminal-handle-copy'
-import { getActivePanePtyId, getActiveTerminalNoteTarget } from '@/lib/agent-session/messaging/terminal/active-agent-note-target'
+import {
+  getActivePanePtyId,
+  getActiveTerminalNoteTarget
+} from '@/lib/agent-session/messaging/terminal/active-agent-note-target'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { TerminalContextShareSource } from './terminal-context-share-request'

@@ -14,9 +14,12 @@ const GENERATED_FILES = [
   'src/shared/plugins/languages/protected-copy-keys.json'
 ]
 const REGENERATE_COMMANDS = [
-  ['config/scripts/verify-localization-catalog.mjs', '--fix'],
-  ['config/scripts/generate-runtime-required-english-catalog.mjs', '--fix'],
-  ['config/scripts/protected-copy-keys.mjs', '--fix']
+  ['config/scripts/localization/catalog-validation/verify-localization-catalog.mjs', '--fix'],
+  [
+    'config/scripts/localization/catalog-validation/generate-runtime-required-english-catalog.mjs',
+    '--fix'
+  ],
+  ['config/scripts/localization/catalog-validation/protected-copy-keys.mjs', '--fix']
 ]
 const TYPECHECK_PROJECTS = ['config/tsconfig.node.json', 'config/tsconfig.tc.web.json']
 
@@ -92,7 +95,7 @@ function typecheck() {
   let failed = false
   for (const project of TYPECHECK_PROJECTS) {
     const result = run(process.execPath, [
-      'config/scripts/run-typecheck-projects-in-parallel.mjs',
+      'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs',
       `--project=${project}`
     ])
     const errors = `${result.stdout}\n${result.stderr}`
