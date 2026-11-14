@@ -5,7 +5,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { TerminalContextShareTarget } from './terminal-context-share-targets'
 import type { TerminalContextSharePreferredTarget } from './terminal-context-share-request'
 
@@ -35,14 +35,12 @@ export function TerminalTargetSelect({
   disabled?: boolean
   onChange: (key: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Select value={value ?? undefined} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger id={id} className="w-full">
         <SelectValue
-          placeholder={translate(
-            'components.terminalContextShare.targetPlaceholder',
-            'Choose a terminal'
-          )}
+          placeholder={t('components.terminalContextShare.targetPlaceholder', 'Choose a terminal')}
         />
       </SelectTrigger>
       <SelectContent position="popper">
@@ -53,7 +51,7 @@ export function TerminalTargetSelect({
             <span className="shrink-0 text-xs text-muted-foreground">
               {`${terminal.worktreeLabel} · ${
                 terminal.agentLabel ??
-                translate('components.terminalContextShare.targetNoAgent', 'No agent')
+                t('components.terminalContextShare.targetNoAgent', 'No agent')
               }`}
             </span>
           </SelectItem>

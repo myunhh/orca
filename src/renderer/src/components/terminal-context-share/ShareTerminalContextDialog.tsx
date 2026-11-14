@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   DEFAULT_TERMINAL_CONTEXT_SUMMARY_MODEL_CHOICE_ID,
   TERMINAL_CONTEXT_INSTRUCTION_MAX_CHARS,
@@ -35,14 +35,14 @@ import {
   type ShareTerminalContextStage
 } from './use-share-terminal-context'
 
-function stageLabel(stage: ShareTerminalContextStage): string | null {
+function stageLabel(stage: ShareTerminalContextStage, t: Translate): string | null {
   switch (stage) {
     case 'reading':
-      return translate('components.terminalContextShare.stageReading', 'Reading terminal…')
+      return t('components.terminalContextShare.stageReading', 'Reading terminal…')
     case 'summarizing':
-      return translate('components.terminalContextShare.stageSummarizing', 'Summarizing…')
+      return t('components.terminalContextShare.stageSummarizing', 'Summarizing…')
     case 'sending':
-      return translate('components.terminalContextShare.stageSending', 'Sending…')
+      return t('components.terminalContextShare.stageSending', 'Sending…')
     case 'idle':
       return null
   }
@@ -57,11 +57,12 @@ export default function ShareTerminalContextDialog({
   preferredTarget?: TerminalContextSharePreferredTarget
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <TerminalContextShareDialogShell
       source={source}
-      title={translate('components.terminalContextShare.shareTitle', 'Share Terminal Context')}
-      description={translate(
+      title={t('components.terminalContextShare.shareTitle', 'Share Terminal Context')}
+      description={t(
         'components.terminalContextShare.shareDescription',
         'Send what “{{source}}” is working on to another terminal’s agent. Review the text before it is sent.',
         { source: source.title }
@@ -91,6 +92,7 @@ function ShareTerminalContextForm({
   endpoints: TerminalContextShareReadyEndpoints
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const ids = useId()
   const [targetKey, setTargetKey] = useState<string | null>(() =>
     firstSelectableTargetKey(endpoints.targets, preferredTarget)
@@ -111,7 +113,7 @@ function ShareTerminalContextForm({
     TERMINAL_CONTEXT_SUMMARY_MODEL_CHOICES.find((candidate) => candidate.id === choiceId) ??
     TERMINAL_CONTEXT_SUMMARY_MODEL_CHOICES[0]
   const working = share.stage !== 'idle'
-  const progress = stageLabel(share.stage)
+  const progress = stageLabel(share.stage, t)
 
   const send = async (): Promise<void> => {
     if (!target) {
@@ -120,7 +122,7 @@ function ShareTerminalContextForm({
     const result = await share.send(target)
     if (result.ok) {
       toast.success(
-        translate('components.terminalContextShare.sent', 'Context sent to “{{target}}”.', {
+        t('components.terminalContextShare.sent', 'Context sent to “{{target}}”.', {
           target: target.title
         })
       )
@@ -133,7 +135,7 @@ function ShareTerminalContextForm({
       <div className="grid gap-4">
         <div className="grid gap-2">
           <Label htmlFor={`${ids}-target`}>
-            {translate('components.terminalContextShare.targetLabel', 'Send to')}
+            {t('components.terminalContextShare.targetLabel', 'Send to')}
           </Label>
           <TerminalTargetSelect
             id={`${ids}-target`}
@@ -144,7 +146,7 @@ function ShareTerminalContextForm({
           />
         </div>
         <div className="grid gap-2">
-          <Label>{translate('components.terminalContextShare.contentLabel', 'Content')}</Label>
+          <Label>{t('components.terminalContextShare.contentLabel', 'Content')}</Label>
           <ToggleGroup
             type="single"
             spacing={1}
@@ -159,10 +161,10 @@ function ShareTerminalContextForm({
             }}
           >
             <ToggleGroupItem value="summary" disabled={!window.api.terminalContext}>
-              {translate('components.terminalContextShare.modeSummary', 'Summarize with model')}
+              {t('components.terminalContextShare.modeSummary', 'Summarize with model')}
             </ToggleGroupItem>
             <ToggleGroupItem value="raw">
-              {translate('components.terminalContextShare.modeRaw', 'Send raw screen')}
+              {t('components.terminalContextShare.modeRaw', 'Send raw screen')}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -170,7 +172,7 @@ function ShareTerminalContextForm({
           <>
             <div className="grid gap-2">
               <Label htmlFor={`${ids}-model`}>
-                {translate('components.terminalContextShare.modelLabel', 'Summary model')}
+                {t('components.terminalContextShare.modelLabel', 'Summary model')}
               </Label>
               <Select value={choice.id} onValueChange={setChoiceId} disabled={working}>
                 <SelectTrigger id={`${ids}-model`} className="w-full">
@@ -185,7 +187,7 @@ function ShareTerminalContextForm({
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'components.terminalContextShare.modelHint',
                   'Runs headlessly with your local Claude or Codex CLI login.'
                 )}
@@ -193,7 +195,7 @@ function ShareTerminalContextForm({
             </div>
             <div className="grid gap-2">
               <Label htmlFor={`${ids}-instruction`}>
-                {translate('components.terminalContextShare.instructionLabel', 'Focus (optional)')}
+                {t('components.terminalContextShare.instructionLabel', 'Focus (optional)')}
               </Label>
               <Textarea
                 id={`${ids}-instruction`}
@@ -201,7 +203,7 @@ function ShareTerminalContextForm({
                 value={instruction}
                 maxLength={TERMINAL_CONTEXT_INSTRUCTION_MAX_CHARS}
                 disabled={working}
-                placeholder={translate(
+                placeholder={t(
                   'components.terminalContextShare.instructionPlaceholder',
                   'e.g. the failing test and what was already tried'
                 )}
@@ -219,8 +221,8 @@ function ShareTerminalContextForm({
             onClick={() => void share.generate({ mode, choice, instruction })}
           >
             {share.preview === null
-              ? translate('components.terminalContextShare.generate', 'Generate Preview')
-              : translate('components.terminalContextShare.regenerate', 'Regenerate')}
+              ? t('components.terminalContextShare.generate', 'Generate Preview')
+              : t('components.terminalContextShare.regenerate', 'Regenerate')}
           </Button>
           {progress ? (
             <span className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -230,14 +232,14 @@ function ShareTerminalContextForm({
           ) : null}
           {share.stage === 'reading' || share.stage === 'summarizing' ? (
             <Button type="button" variant="ghost" size="sm" onClick={share.cancel}>
-              {translate('components.terminalContextShare.stop', 'Stop')}
+              {t('components.terminalContextShare.stop', 'Stop')}
             </Button>
           ) : null}
         </div>
         {share.preview !== null ? (
           <div className="grid gap-2">
             <Label htmlFor={`${ids}-preview`}>
-              {translate('components.terminalContextShare.previewLabel', 'Message to send')}
+              {t('components.terminalContextShare.previewLabel', 'Message to send')}
             </Label>
             <Textarea
               id={`${ids}-preview`}
@@ -250,7 +252,7 @@ function ShareTerminalContextForm({
             />
             {target?.onSourceRuntime ? (
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'components.terminalContextShare.readHintNote',
                   'Orca appends this line for the receiving agent: {{line}}',
                   { line: buildSourceReadHint(endpoints.sourceHandle) }
@@ -267,14 +269,14 @@ function ShareTerminalContextForm({
       </div>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onClose}>
-          {translate('components.terminalContextShare.cancel', 'Cancel')}
+          {t('components.terminalContextShare.cancel', 'Cancel')}
         </Button>
         <Button
           type="button"
           disabled={working || !target || !share.preview?.trim()}
           onClick={() => void send()}
         >
-          {translate('components.terminalContextShare.send', 'Send to Agent')}
+          {t('components.terminalContextShare.send', 'Send to Agent')}
         </Button>
       </DialogFooter>
     </>

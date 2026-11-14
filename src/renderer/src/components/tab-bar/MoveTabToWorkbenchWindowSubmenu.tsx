@@ -12,7 +12,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   WORKBENCH_MAX_TABS,
@@ -42,11 +42,11 @@ const MENU_PARTS = {
 type OrderedSummary = WorkbenchWindowSummary & { ordinal: number | null }
 
 // Same "Window N" as that window's title bar; the suffix only hints at its contents.
-function windowLabel(summary: OrderedSummary): string {
+function windowLabel(summary: OrderedSummary, t: Translate): string {
   if (summary.ordinal === null) {
     return summary.firstTabLabel ?? ''
   }
-  const name = translate(
+  const name = t(
     'components.tab.bar.MoveTabToWorkbenchWindowSubmenu.windowName',
     'Window {{windowNumber}}',
     { windowNumber: summary.ordinal }
@@ -74,10 +74,10 @@ function useWorkbenchWindowEntries(): WorkbenchWindowEntry[] | null {
   return entries
 }
 
-function tabCountLabel(count: number): string {
+function tabCountLabel(count: number, t: Translate): string {
   return count === 1
-    ? translate('components.tab.bar.MoveTabToWorkbenchWindowSubmenu.oneTab', '1 tab')
-    : translate('components.tab.bar.MoveTabToWorkbenchWindowSubmenu.tabCount', '{{count}} tabs', {
+    ? t('components.tab.bar.MoveTabToWorkbenchWindowSubmenu.oneTab', '1 tab')
+    : t('components.tab.bar.MoveTabToWorkbenchWindowSubmenu.tabCount', '{{count}} tabs', {
         count
       })
 }
@@ -90,6 +90,7 @@ export function MoveTabToWorkbenchWindowSubmenu({
   unifiedTabId: string
   menuKind: 'dropdown' | 'context'
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const detachedWindowIdByTabId = useAppStore((state) => state.detachedWindowIdByTabId)
   const unifiedTabsByWorktree = useAppStore((state) => state.unifiedTabsByWorktree)
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
@@ -129,7 +130,7 @@ export function MoveTabToWorkbenchWindowSubmenu({
     <Sub>
       <SubTrigger>
         <SquareStack className="size-3.5 shrink-0" />
-        {translate('components.tab.bar.MoveTabToWorkbenchWindowSubmenu.moveTo', 'Move to Window')}
+        {t('components.tab.bar.MoveTabToWorkbenchWindowSubmenu.moveTo', 'Move to Window')}
       </SubTrigger>
       <SubContent className="max-w-80">
         {summaries.map((summary) => (
@@ -140,9 +141,9 @@ export function MoveTabToWorkbenchWindowSubmenu({
               void moveTabsToExistingWorkbenchWindow([unifiedTabId], summary.windowId)
             }
           >
-            <span className="min-w-0 truncate">{windowLabel(summary)}</span>
+            <span className="min-w-0 truncate">{windowLabel(summary, t)}</span>
             <span className="ml-auto shrink-0 pl-3 text-2xs text-muted-foreground">
-              {tabCountLabel(summary.tabCount)}
+              {tabCountLabel(summary.tabCount, t)}
             </span>
           </Item>
         ))}

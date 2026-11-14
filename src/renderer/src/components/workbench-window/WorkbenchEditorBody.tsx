@@ -3,7 +3,7 @@ import { AppWindow, Loader2, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import ImageViewer from '@/components/editor/ImageViewer'
 import MarkdownPreview from '@/components/editor/markdown-preview/surface/MarkdownPreview'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type {
   WorkbenchEditorContent,
@@ -45,6 +45,7 @@ function useWorkbenchEditorContent(tabId: string, reloadToken: number): EditorBo
 }
 
 export function WorkbenchEditorBody({ tab }: { tab: WorkbenchTabView }): React.JSX.Element | null {
+  const t = useTranslate()
   const [reloadToken, setReloadToken] = useState(0)
   const state = useWorkbenchEditorContent(tab.tabId, reloadToken)
   const editor = tab.editor
@@ -59,7 +60,7 @@ export function WorkbenchEditorBody({ tab }: { tab: WorkbenchTabView }): React.J
         </span>
         <Button variant="ghost" size="xs" onClick={() => setReloadToken((token) => token + 1)}>
           <RotateCw />
-          {translate('components.workbench.window.WorkbenchEditorBody.reload', 'Reload')}
+          {t('components.workbench.window.WorkbenchEditorBody.reload', 'Reload')}
         </Button>
         <Button
           variant="ghost"
@@ -67,16 +68,13 @@ export function WorkbenchEditorBody({ tab }: { tab: WorkbenchTabView }): React.J
           onClick={() => sendWorkbenchCommand({ kind: 'revealInMain', tabId: tab.tabId })}
         >
           <AppWindow />
-          {translate(
-            'components.workbench.window.WorkbenchEditorBody.openInMain',
-            'Open in Main Window'
-          )}
+          {t('components.workbench.window.WorkbenchEditorBody.openInMain', 'Open in Main Window')}
         </Button>
       </div>
       {state.status === 'loading' ? (
         <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          {translate('components.workbench.window.WorkbenchEditorBody.loading', 'Loading file…')}
+          {t('components.workbench.window.WorkbenchEditorBody.loading', 'Loading file…')}
         </div>
       ) : state.status === 'error' ? (
         <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-muted-foreground">

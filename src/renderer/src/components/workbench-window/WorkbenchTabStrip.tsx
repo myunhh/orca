@@ -12,7 +12,7 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getTabRootStateClasses
 } from '@/components/tab-bar/drop-indicator'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type {
   WorkbenchAdoptableTab,
@@ -33,6 +33,7 @@ function WorkbenchTab({
   hasTabsToRight: boolean
   onActivate: (tabId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -71,10 +72,7 @@ function WorkbenchTab({
             variant="ghost"
             size="icon-xs"
             className="ml-0.5 shrink-0"
-            aria-label={translate(
-              'components.workbench.window.WorkbenchTabStrip.closeTab',
-              'Close Tab'
-            )}
+            aria-label={t('components.workbench.window.WorkbenchTabStrip.closeTab', 'Close Tab')}
             onClick={(event) => {
               event.stopPropagation()
               sendWorkbenchCommand({ kind: 'closeTab', tabId: tab.tabId })
@@ -89,26 +87,20 @@ function WorkbenchTab({
           onSelect={() => sendWorkbenchCommand({ kind: 'returnTab', tabId: tab.tabId })}
         >
           <Undo2 className="size-3.5 shrink-0" />
-          {translate(
-            'components.workbench.window.WorkbenchTabStrip.returnToMain',
-            'Return to Main Window'
-          )}
+          {t('components.workbench.window.WorkbenchTabStrip.returnToMain', 'Return to Main Window')}
         </ContextMenuItem>
         <ContextMenuItem
           onSelect={() => sendWorkbenchCommand({ kind: 'revealInMain', tabId: tab.tabId })}
         >
           <AppWindow className="size-3.5 shrink-0" />
-          {translate(
-            'components.workbench.window.WorkbenchTabStrip.openInMain',
-            'Open in Main Window'
-          )}
+          {t('components.workbench.window.WorkbenchTabStrip.openInMain', 'Open in Main Window')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() => sendWorkbenchCommand({ kind: 'closeTab', tabId: tab.tabId })}
         >
           <X className="size-3.5 shrink-0" />
-          {translate('components.workbench.window.WorkbenchTabStrip.close', 'Close')}
+          {t('components.workbench.window.WorkbenchTabStrip.close', 'Close')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -134,15 +126,13 @@ export function WorkbenchTabStrip({
   onAdopt: (tabId: string) => void
   onToggleSplit: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const activeTab = tabs.find((tab) => tab.tabId === activeTabId) ?? tabs[0] ?? null
-  const newTerminalLabel = translate(
+  const newTerminalLabel = t(
     'components.workbench.window.WorkbenchTabStrip.newTerminal',
     'New Terminal'
   )
-  const splitLabel = translate(
-    'components.workbench.window.WorkbenchTabStrip.splitView',
-    'Split View'
-  )
+  const splitLabel = t('components.workbench.window.WorkbenchTabStrip.splitView', 'Split View')
   return (
     <div className="flex h-9 shrink-0 items-stretch border-b border-border bg-tab-bar">
       <div

@@ -26,6 +26,14 @@ It adds the `upstream` remote on first use, tags a backup, merges `upstream/main
 - Skip the typecheck: add `--skip-checks`
 - Afterwards run `pnpm install` and rebuild or restart `pnpm dev`
 
+## CI cache warmup on forks
+
+Forks warm only GitHub-hosted caches. The shared runtime, package-fixture and xterm cache matrices retain Blacksmith runners only for `stablyai/orca`, whose separate runner pool and cache store are provisioned upstream. macOS and Windows cache coverage is unchanged.
+
+`Cancelled` does not necessarily mean a code failure: inspect the job annotations. A macOS job with no steps and “The job was not acquired by Runner” failed runner allocation; changing dependencies or switching architecture would not repair that capacity shortage.
+
+See [the codebase dependency analysis](docs/codebase-dependency-analysis.md) for the graph artifacts, verified findings and remaining limitations.
+
 ## SSH hosts: getting the server template
 
 To work on an SSH host, Orca installs its own server there from a server template bundled with the app. Release builds include it. Builds of this fork made with `pnpm dev` or a local packaging run do not, so connecting to an SSH host shows **"This host isn't supported by this version of Orca"**. Building the template needs node-pty compiled on Linux, macOS and Windows, so it is made on GitHub Actions and downloaded once:

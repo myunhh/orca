@@ -26,6 +26,7 @@ import type {
   AiVaultServiceSubagentRequest
 } from './session-scanner-service-protocol'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import { localAiVaultScanRoots } from '../ai-vault-scan-roots'
 import type { LocalAiVaultScanProgressHandle } from '../ai-vault-local-scan-progress'
 
 // Let forced refreshes retry after a local service circuit opens.
@@ -65,7 +66,6 @@ export async function readAiVaultFirstUserPromptInBackground(
   request: ReadAiVaultFirstUserPromptArgs
 ): Promise<ReadAiVaultFirstUserPromptResult> {
   if (process.platform === 'win32' && isWslUncPath(request.filePath)) {
-    const { localAiVaultScanRoots } = await import('../cached-session-list')
     const roots = await localAiVaultScanRoots()
     request = { ...request, wslOpenCodeReaders: roots.wslOpenCodeReaders ?? [] }
   }

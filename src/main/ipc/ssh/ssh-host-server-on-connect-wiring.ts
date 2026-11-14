@@ -46,8 +46,8 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
   const claims = registry.getOrcadRuntimeClaims()
   const store = registry.getOrcadMigrationSource()
   // Why the template too: a refusal recorded before a server template was added must be reprobed.
-  const refusalVersion = (): string =>
-    `${getAppEnvironment().getVersion()}+template.${orcadTemplateFingerprint()}`
+  const refusalVersion = async (): Promise<string> =>
+    `${getAppEnvironment().getVersion()}+template.${await orcadTemplateFingerprint()}`
   const isRegistered = (environmentId: string): boolean =>
     listEnvironments(userDataPath).some((entry) => entry.id === environmentId)
   return {
@@ -79,22 +79,22 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         : 0
     },
     hasTemplate: hasOrcadTemplate,
-    recordedUnavailable: (target) => {
+    recordedUnavailable: async (target) => {
       const recorded = target.managedServerUnavailable
       if (!recorded) {
         return null
       }
-      if (recorded.appVersion === refusalVersion()) {
+      if (recorded.appVersion === (await refusalVersion())) {
         return recorded.reason
       }
       // Why: a stale refusal would keep showing in Settings after this build can serve the host.
       registry.updateTarget(target.id, { managedServerUnavailable: undefined })
       return null
     },
-    recordUnavailable: (target, reason) => {
+    recordUnavailable: async (target, reason) => {
       if (!isOrcadHostUnavailableFixableOnHost(reason)) {
         registry.updateTarget(target.id, {
-          managedServerUnavailable: { reason, appVersion: refusalVersion() }
+          managedServerUnavailable: { reason, appVersion: await refusalVersion() }
         })
       }
     },

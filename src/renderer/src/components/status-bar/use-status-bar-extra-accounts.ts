@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useAppStore } from '../../store'
 import type { InactiveAccountUsage, ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { hasUsageData } from '../../../../shared/usage-provider-windows'
@@ -94,9 +95,10 @@ export function useStatusBarExtraAccounts(): StatusBarExtraAccounts {
         void fetchInactiveCodex()
       }
     }
-    fetchAll()
-    const timer = setInterval(fetchAll, EXTRA_ACCOUNT_REFRESH_MS)
-    return () => clearInterval(timer)
+    return installWindowVisibilityInterval({
+      run: fetchAll,
+      intervalMs: EXTRA_ACCOUNT_REFRESH_MS
+    })
   }, [wantClaude, wantCodex, fetchInactiveClaude, fetchInactiveCodex])
 
   return useMemo(

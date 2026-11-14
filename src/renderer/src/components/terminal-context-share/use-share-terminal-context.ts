@@ -26,6 +26,19 @@ export type ShareTerminalContextStage = 'idle' | 'reading' | 'summarizing' | 'se
 
 type ShareRun = { controller: AbortController; requestId: string | null }
 
+type ShareSource = {
+  sourceTitle: string
+  sourceHandle: string
+  sourceRuntimeTarget: RuntimeClientTarget
+  sourceAgent: string | null
+}
+
+type GenerateOptions = {
+  mode: TerminalContextReadMode
+  choice: TerminalContextSummaryModelChoice
+  instruction: string
+}
+
 function abortRun(run: ShareRun | null): void {
   if (!run) {
     return
@@ -36,21 +49,108 @@ function abortRun(run: ShareRun | null): void {
   }
 }
 
-export function useShareTerminalContext(args: {
-  sourceTitle: string
-  sourceHandle: string
-  sourceRuntimeTarget: RuntimeClientTarget
-  sourceAgent: string | null
-}): {
+async function generateTerminalContext({
+  source: { sourceTitle, sourceHandle, sourceRuntimeTarget, sourceAgent },
+  options: { mode, choice, instruction },
+  runRef,
+  setError,
+  setStage,
+  setPreview
+}: {
+  source: ShareSource
+  options: GenerateOptions
+  runRef: { current: ShareRun | null }
+  setError: (error: string | null) => void
+  setStage: (stage: ShareTerminalContextStage) => void
+  setPreview: (preview: string) => void
+}): Promise<void> {
+  abortRun(runRef.current)
+  const run: ShareRun = { controller: new AbortController(), requestId: null }
+  runRef.current = run
+  const isCurrent = (): boolean => runRef.current === run
+  setError(null)
+  setStage('reading')
+  let failure = translate(
+    'components.terminalContextShare.readFailed',
+    'Could not read the source terminal.'
+  )
+  try {
+    const text = await readTerminalContextText({
+      runtimeTarget: sourceRuntimeTarget,
+      handle: sourceHandle,
+      mode,
+      signal: run.controller.signal
+    })
+    if (!isCurrent()) {
+      return
+    }
+    const source = { title: sourceTitle }
+    if (!text.trim()) {
+      setError(
+        translate(
+          'components.terminalContextShare.noOutput',
+          'The source terminal has no output to share yet.'
+        )
+      )
+    } else if (mode === 'raw') {
+      setPreview(buildSharedScreenMessage({ source, screen: text }))
+    } else if (!window.api.terminalContext) {
+      setError(
+        translate(
+          'components.terminalContextShare.summaryUnavailable',
+          'Summaries run on the Orca desktop app. Send the raw screen instead.'
+        )
+      )
+    } else {
+      run.requestId = createBrowserUuid()
+      setStage('summarizing')
+      failure = translate(
+        'components.terminalContextShare.summaryFailed',
+        'Could not summarize the source terminal.'
+      )
+      const result = await window.api.terminalContext.summarize({
+        requestId: run.requestId,
+        // Pane titles are OSC-controlled and unbounded; main rejects longer ones.
+        sourceTitle: sourceTitle.slice(0, TERMINAL_CONTEXT_TITLE_MAX_CHARS),
+        sourceAgent,
+        text,
+        ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
+        agentId: choice.agentId,
+        model: choice.model
+      })
+      if (!isCurrent()) {
+        return
+      }
+      if (result.success) {
+        setPreview(
+          buildSharedSummaryMessage({
+            source,
+            modelName: choice.displayName,
+            summary: result.summary
+          })
+        )
+      } else if (!result.canceled) {
+        setError(textGenerationErrorText(result))
+      }
+    }
+  } catch {
+    if (isCurrent()) {
+      setError(failure)
+    }
+  } finally {
+    if (isCurrent()) {
+      runRef.current = null
+      setStage('idle')
+    }
+  }
+}
+
+export function useShareTerminalContext(args: ShareSource): {
   stage: ShareTerminalContextStage
   preview: string | null
   setPreview: (preview: string) => void
   error: string | null
-  generate: (options: {
-    mode: TerminalContextReadMode
-    choice: TerminalContextSummaryModelChoice
-    instruction: string
-  }) => Promise<void>
+  generate: (options: GenerateOptions) => Promise<void>
   cancel: () => void
   send: (target: TerminalContextShareTarget) => Promise<TerminalContextDeliveryResult>
 } {
@@ -63,95 +163,15 @@ export function useShareTerminalContext(args: {
   useEffect(() => () => abortRun(runRef.current), [])
 
   const generate = useCallback(
-    async ({
-      mode,
-      choice,
-      instruction
-    }: {
-      mode: TerminalContextReadMode
-      choice: TerminalContextSummaryModelChoice
-      instruction: string
-    }): Promise<void> => {
-      abortRun(runRef.current)
-      const run: ShareRun = { controller: new AbortController(), requestId: null }
-      runRef.current = run
-      const isCurrent = (): boolean => runRef.current === run
-      setError(null)
-      setStage('reading')
-      let failure = translate(
-        'components.terminalContextShare.readFailed',
-        'Could not read the source terminal.'
-      )
-      try {
-        const text = await readTerminalContextText({
-          runtimeTarget: sourceRuntimeTarget,
-          handle: sourceHandle,
-          mode,
-          signal: run.controller.signal
-        })
-        if (!isCurrent()) {
-          return
-        }
-        const source = { title: sourceTitle }
-        if (!text.trim()) {
-          setError(
-            translate(
-              'components.terminalContextShare.noOutput',
-              'The source terminal has no output to share yet.'
-            )
-          )
-        } else if (mode === 'raw') {
-          setPreview(buildSharedScreenMessage({ source, screen: text }))
-        } else if (!window.api.terminalContext) {
-          setError(
-            translate(
-              'components.terminalContextShare.summaryUnavailable',
-              'Summaries run on the Orca desktop app. Send the raw screen instead.'
-            )
-          )
-        } else {
-          run.requestId = createBrowserUuid()
-          setStage('summarizing')
-          failure = translate(
-            'components.terminalContextShare.summaryFailed',
-            'Could not summarize the source terminal.'
-          )
-          const result = await window.api.terminalContext.summarize({
-            requestId: run.requestId,
-            // Pane titles are OSC-controlled and unbounded; main rejects longer ones.
-            sourceTitle: sourceTitle.slice(0, TERMINAL_CONTEXT_TITLE_MAX_CHARS),
-            sourceAgent,
-            text,
-            ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
-            agentId: choice.agentId,
-            model: choice.model
-          })
-          if (!isCurrent()) {
-            return
-          }
-          if (result.success) {
-            setPreview(
-              buildSharedSummaryMessage({
-                source,
-                modelName: choice.displayName,
-                summary: result.summary
-              })
-            )
-          } else if (!result.canceled) {
-            setError(textGenerationErrorText(result))
-          }
-        }
-      } catch {
-        if (isCurrent()) {
-          setError(failure)
-        }
-      } finally {
-        if (isCurrent()) {
-          runRef.current = null
-          setStage('idle')
-        }
-      }
-    },
+    (options: GenerateOptions): Promise<void> =>
+      generateTerminalContext({
+        source: { sourceTitle, sourceHandle, sourceRuntimeTarget, sourceAgent },
+        options,
+        runRef,
+        setError,
+        setStage,
+        setPreview
+      }),
     [sourceAgent, sourceHandle, sourceRuntimeTarget, sourceTitle]
   )
 

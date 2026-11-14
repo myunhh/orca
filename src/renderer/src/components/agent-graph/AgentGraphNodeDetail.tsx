@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/agent-graph/agent-graph-types'
 import { formatSubagentTokens } from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
 import { Button } from '@/components/ui/button'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   agentGraphEdgeKindLabel,
   agentGraphMessageRoleLabel,
@@ -27,17 +27,18 @@ export function AgentGraphNodeDetail({
   edges,
   onClose
 }: AgentGraphNodeDetailProps): React.JSX.Element {
+  const t = useTranslate()
   const { incoming, results } = agentGraphNodeEdges(edges, node)
   const transcript = useNodeMessages(node)
   const facts = [
     node.agentType,
     node.totalTokens > 0
-      ? translate('components.agentGraph.AgentGraphNodeDetail.tokens', '{{tokens}} tokens', {
+      ? t('components.agentGraph.AgentGraphNodeDetail.tokens', '{{tokens}} tokens', {
           tokens: formatSubagentTokens(node.totalTokens)
         })
       : null,
     node.messageCount > 0
-      ? translate('components.agentGraph.AgentGraphNodeDetail.messageCount', '{{count}} messages', {
+      ? t('components.agentGraph.AgentGraphNodeDetail.messageCount', '{{count}} messages', {
           count: node.messageCount
         })
       : null
@@ -52,10 +53,7 @@ export function AgentGraphNodeDetail({
           variant="ghost"
           size="icon-xs"
           onClick={onClose}
-          aria-label={translate(
-            'components.agentGraph.AgentGraphNodeDetail.close',
-            'Close details'
-          )}
+          aria-label={t('components.agentGraph.AgentGraphNodeDetail.close', 'Close details')}
         >
           <X />
         </Button>
@@ -80,13 +78,14 @@ export function AgentGraphNodeDetail({
 }
 
 function EdgeSection({ edge }: { edge: AgentGraphEdge }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!edge.text) {
     return null
   }
   return (
     <section className="mt-3">
       <h3 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {agentGraphEdgeKindLabel(edge.kind)}
+        {agentGraphEdgeKindLabel(edge.kind, t)}
       </h3>
       <p className="mt-1 whitespace-pre-wrap break-words text-xs text-foreground">{edge.text}</p>
     </section>
@@ -129,12 +128,13 @@ function TranscriptSection({
   transcript: NodeMessagesState
   hasTranscript: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!hasTranscript) {
     return null
   }
   const heading = (
     <h3 className="mt-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-      {translate('components.agentGraph.AgentGraphNodeDetail.transcript', 'Transcript')}
+      {t('components.agentGraph.AgentGraphNodeDetail.transcript', 'Transcript')}
     </h3>
   )
   const { result } = transcript
@@ -144,7 +144,7 @@ function TranscriptSection({
         {heading}
         <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" />
-          {translate('components.agentGraph.AgentGraphNodeDetail.loading', 'Reading transcript…')}
+          {t('components.agentGraph.AgentGraphNodeDetail.loading', 'Reading transcript…')}
         </div>
       </section>
     )
@@ -154,7 +154,7 @@ function TranscriptSection({
       <section>
         {heading}
         <p className="mt-1 text-xs text-destructive">
-          {agentGraphNodeMessagesUnavailableCopy(result)}
+          {agentGraphNodeMessagesUnavailableCopy(result, t)}
         </p>
       </section>
     )
@@ -165,7 +165,7 @@ function TranscriptSection({
       {result.openingPrompt ? <MessageRow message={result.openingPrompt} /> : null}
       {result.truncated ? (
         <p className="mt-2 text-2xs text-muted-foreground">
-          {translate(
+          {t(
             'components.agentGraph.AgentGraphNodeDetail.olderSkipped',
             'Older messages are not shown.'
           )}
@@ -179,16 +179,16 @@ function TranscriptSection({
 }
 
 function MessageRow({ message }: { message: AgentGraphMessage }): React.JSX.Element {
+  const t = useTranslate()
+  const locale = useIntlLocale()
   return (
     <div className="mt-2 border-l border-border pl-2">
       <div className="flex items-center gap-2 text-2xs text-muted-foreground">
         <span className="font-medium text-foreground">
-          {agentGraphMessageRoleLabel(message.role)}
+          {agentGraphMessageRoleLabel(message.role, t)}
         </span>
         {message.model ? <span className="font-mono">{message.model}</span> : null}
-        {message.at ? (
-          <span>{new Date(message.at).toLocaleTimeString(getIntlLocale())}</span>
-        ) : null}
+        {message.at ? <span>{new Date(message.at).toLocaleTimeString(locale)}</span> : null}
       </div>
       <p className="mt-0.5 line-clamp-6 whitespace-pre-wrap break-words text-xs text-foreground">
         {message.text}

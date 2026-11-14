@@ -68,11 +68,13 @@ jobs:
     concurrency:
       group: ci-cache-warmup-linux-x64-${{ matrix.runner }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    # Blacksmith and GitHub-hosted jobs restore from separate cache stores; warm both.
+    # Forks warm GitHub-hosted caches; Blacksmith's separate store is provisioned upstream.
     strategy:
       fail-fast: false
       matrix:
-        runner: [blacksmith-4vcpu-ubuntu-2404, ubuntu-24.04]
+        runner: >-
+          ${{ fromJSON(github.repository == 'stablyai/orca' &&
+          '["blacksmith-4vcpu-ubuntu-2404","ubuntu-24.04"]' || '["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select'
 import { useAppMenuPaste } from '@/hooks/clipboard/menu/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '@/hooks/app-commands/useAppMenuSelectionActions'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   WorkbenchAdoptableTab,
   WorkbenchTabView
@@ -79,6 +79,7 @@ function WorkbenchSplitPane({
 
 /** A detached window: a Chrome-like strip over main-owned tabs, with an optional side-by-side split. */
 export function WorkbenchWindowRoot(): React.JSX.Element {
+  const t = useTranslate()
   // No App shell here translates Edit-menu IPC into terminal ownership events.
   useAppMenuPaste()
   useAppMenuSelectionActions()
@@ -96,15 +97,13 @@ export function WorkbenchWindowRoot(): React.JSX.Element {
     []
   )
 
-  const appTitle = translate('components.workbench.window.WorkbenchWindowRoot.title', 'Orca')
+  const appTitle = t('components.workbench.window.WorkbenchWindowRoot.title', 'Orca')
   const windowName =
     WINDOW_ORDINAL === null
       ? null
-      : translate(
-          'components.workbench.window.WorkbenchWindowRoot.windowName',
-          'Window {{windowNumber}}',
-          { windowNumber: WINDOW_ORDINAL }
-        )
+      : t('components.workbench.window.WorkbenchWindowRoot.windowName', 'Window {{windowNumber}}', {
+          windowNumber: WINDOW_ORDINAL
+        })
   const windowTitle = windowName ? `${windowName} — ${appTitle}` : appTitle
   useEffect(() => {
     document.title = activeTab ? `${activeTab.label} — ${windowTitle}` : windowTitle
@@ -115,19 +114,13 @@ export function WorkbenchWindowRoot(): React.JSX.Element {
     body = (
       <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
-        {translate(
-          'components.workbench.window.WorkbenchWindowRoot.loading',
-          'Connecting to Orca…'
-        )}
+        {t('components.workbench.window.WorkbenchWindowRoot.loading', 'Connecting to Orca…')}
       </div>
     )
   } else if (!activeTab) {
     body = (
       <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-        {translate(
-          'components.workbench.window.WorkbenchWindowRoot.empty',
-          'No tabs in this window'
-        )}
+        {t('components.workbench.window.WorkbenchWindowRoot.empty', 'No tabs in this window')}
       </div>
     )
   } else if (secondaryTab) {

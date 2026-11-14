@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkbenchAdoptableTab } from '../../../../shared/workbench-window/workbench-window-types'
 import { WorkbenchTabIcon } from './WorkbenchTabIcon'
 
@@ -58,9 +58,10 @@ export function WorkbenchAdoptTabButton({
   splitEnabled: boolean
   onAdopt: (tabId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const groups = useMemo(() => groupByWorkspace(adoptableTabs), [adoptableTabs])
-  const label = translate(
+  const label = t(
     'components.workbench.window.WorkbenchAdoptTabButton.addExisting',
     'Add Existing Tab…'
   )
@@ -81,14 +82,14 @@ export function WorkbenchAdoptTabButton({
       <PopoverContent align="start" wheelScroll className="w-[min(20rem,calc(100vw-1rem))]">
         <Command density="menu" label={label} filter={filterByVisibleText}>
           <CommandInput
-            placeholder={translate(
+            placeholder={t(
               'components.workbench.window.WorkbenchAdoptTabButton.search',
               'Search main window tabs…'
             )}
           />
           {splitEnabled ? (
             <div className="border-b border-border px-3 py-1.5 text-2xs text-muted-foreground">
-              {translate(
+              {t(
                 'components.workbench.window.WorkbenchAdoptTabButton.splitHint',
                 'The tab opens in the right half of the split.'
               )}
@@ -97,11 +98,11 @@ export function WorkbenchAdoptTabButton({
           <CommandList className="max-h-72">
             <CommandEmpty>
               {adoptableTabs.length === 0
-                ? translate(
+                ? t(
                     'components.workbench.window.WorkbenchAdoptTabButton.empty',
                     'No other tabs are open in the main window.'
                   )
-                : translate(
+                : t(
                     'components.workbench.window.WorkbenchAdoptTabButton.noMatches',
                     'No matching tabs'
                   )}
@@ -132,7 +133,7 @@ export function WorkbenchAdoptTabButton({
           </CommandList>
           {truncated ? (
             <div className="border-t border-border px-3 py-1.5 text-2xs text-muted-foreground">
-              {translate(
+              {t(
                 'components.workbench.window.WorkbenchAdoptTabButton.truncated',
                 'Only the first {{count}} tabs are listed.',
                 { count: adoptableTabs.length }

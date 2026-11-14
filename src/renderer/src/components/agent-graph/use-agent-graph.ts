@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import type {
   AgentGraphBuildArgs,
   AgentGraphBuildResult
@@ -15,6 +16,18 @@ export type AgentGraphLoadState = {
   refresh: () => void
 }
 
+async function requestAgentGraph(args: AgentGraphBuildArgs): Promise<AgentGraphBuildResult> {
+  try {
+    return await window.api.aiVault.buildAgentGraph(args)
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'unavailable',
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
 /** Builds the pane's graph, then rebuilds every few seconds (slower after a failure) while visible. */
 export function useAgentGraph(args: {
   paneKey: string | null
@@ -29,7 +42,9 @@ export function useAgentGraph(args: {
   const [loading, setLoading] = useState(false)
   const [refreshToken, setRefreshToken] = useState(0)
   const fallbackRef = useRef(args.fallback)
-  fallbackRef.current = args.fallback
+  useEffect(() => {
+    fallbackRef.current = args.fallback
+  }, [args.fallback])
 
   useEffect(() => {
     if (!paneKey || !isVisible) {
@@ -45,42 +60,25 @@ export function useAgentGraph(args: {
       }
       inFlight = true
       setLoading(true)
-      let failed = false
-      try {
-        const fallback = fallbackRef.current
-        const result = await window.api.aiVault.buildAgentGraph({
-          paneKey,
-          ...(fallback ? { fallback } : {})
-        })
-        failed = !result.ok
-        if (!cancelled) {
-          setState({ paneKey, result })
-        }
-      } catch (error) {
-        failed = true
-        if (!cancelled) {
-          setState({
-            paneKey,
-            result: {
-              ok: false,
-              reason: 'unavailable',
-              message: error instanceof Error ? error.message : String(error)
-            }
-          })
-        }
-      } finally {
-        inFlight = false
-        backoffUntil = failed ? Date.now() + FAILED_REFRESH_MS : 0
-        if (!cancelled) {
-          setLoading(false)
-        }
+      const fallback = fallbackRef.current
+      const result = await requestAgentGraph({
+        paneKey,
+        ...(fallback ? { fallback } : {})
+      })
+      inFlight = false
+      backoffUntil = result.ok ? 0 : Date.now() + FAILED_REFRESH_MS
+      if (!cancelled) {
+        setState({ paneKey, result })
+        setLoading(false)
       }
     }
-    void load()
-    const interval = setInterval(() => void load(), AUTO_REFRESH_MS)
+    const stopRefresh = installWindowVisibilityInterval({
+      run: () => void load(),
+      intervalMs: AUTO_REFRESH_MS
+    })
     return () => {
       cancelled = true
-      clearInterval(interval)
+      stopRefresh()
       setLoading(false)
     }
   }, [paneKey, isVisible, refreshToken])

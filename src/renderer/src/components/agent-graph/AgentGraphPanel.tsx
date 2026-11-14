@@ -10,8 +10,7 @@ import {
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentGraphCanvas } from './AgentGraphCanvas'
 import { AgentGraphNodeDetail } from './AgentGraphNodeDetail'
 import { agentGraphIssuesSummary, agentGraphUnavailableCopy } from './agent-graph-copy'
@@ -27,7 +26,7 @@ import { useAgentGraph } from './use-agent-graph'
 const FOLLOW_ACTIVE_PANE = 'follow-active-pane'
 
 export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): React.JSX.Element {
-  useUiLanguageRevision()
+  const t = useTranslate()
   const statuses = useAppStore((s) => s.agentStatusByPaneKey)
   const activePaneKey = useAppStore(activeTerminalPaneKey)
   const targetPaneKey = useAgentGraphTargetStore((s) => s.paneKey)
@@ -67,7 +66,7 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
         >
           <SelectTrigger size="sm" className="min-w-0 flex-1">
             <SelectValue
-              placeholder={translate(
+              placeholder={t(
                 'components.agentGraph.AgentGraphPanel.pickPane',
                 'Choose an agent pane'
               )}
@@ -76,10 +75,7 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
           <SelectContent>
             <SelectItem value={FOLLOW_ACTIVE_PANE}>
               <span className="truncate">
-                {translate(
-                  'components.agentGraph.AgentGraphPanel.followActivePane',
-                  'Follow active pane'
-                )}
+                {t('components.agentGraph.AgentGraphPanel.followActivePane', 'Follow active pane')}
               </span>
               {!targetIsLive && selectedOption ? (
                 <span className="truncate text-2xs text-muted-foreground">
@@ -104,16 +100,13 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
               size="icon-sm"
               onClick={refresh}
               disabled={!paneKey}
-              aria-label={translate(
-                'components.agentGraph.AgentGraphPanel.refresh',
-                'Refresh graph'
-              )}
+              aria-label={t('components.agentGraph.AgentGraphPanel.refresh', 'Refresh graph')}
             >
               {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate('components.agentGraph.AgentGraphPanel.refresh', 'Refresh graph')}
+            {t('components.agentGraph.AgentGraphPanel.refresh', 'Refresh graph')}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -122,14 +115,14 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
           {graph.truncated || graph.issues.length > 0 ? (
             <div className="shrink-0 border-b border-border px-3 py-1.5 text-2xs text-muted-foreground">
               {graph.truncated
-                ? translate(
+                ? t(
                     'components.agentGraph.AgentGraphPanel.truncated',
                     'Showing the first agents only; the graph hit its size limit.'
                   )
                 : null}
               {graph.issues.length > 0 ? (
                 <div className="truncate" title={graph.issues.join('\n')}>
-                  {agentGraphIssuesSummary(graph.issues.length)}
+                  {agentGraphIssuesSummary(graph.issues.length, t)}
                 </div>
               ) : null}
             </div>
@@ -153,12 +146,12 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
         <AgentGraphEmptyState
           message={
             !paneKey
-              ? translate(
+              ? t(
                   'components.agentGraph.AgentGraphPanel.noPanes',
                   'Start Claude Code, Codex, or OMP in a terminal to see which agents it calls.'
                 )
               : result && !result.ok
-                ? agentGraphUnavailableCopy(result)
+                ? agentGraphUnavailableCopy(result, t)
                 : null
           }
         />
@@ -168,12 +161,13 @@ export default function AgentGraphPanel({ isVisible }: { isVisible: boolean }): 
 }
 
 function AgentGraphEmptyState({ message }: { message: string | null }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">
       {message ? <Network className="size-8 opacity-50" /> : <Loader2 className="animate-spin" />}
       <p className="text-xs">
         {message ??
-          translate('components.agentGraph.AgentGraphPanel.loading', 'Reading agent transcripts…')}
+          t('components.agentGraph.AgentGraphPanel.loading', 'Reading agent transcripts…')}
       </p>
     </div>
   )

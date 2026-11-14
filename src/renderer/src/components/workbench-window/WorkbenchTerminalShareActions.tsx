@@ -1,7 +1,7 @@
 import { Link2, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkbenchTabView } from '../../../../shared/workbench-window/workbench-window-types'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
@@ -77,6 +77,7 @@ function WorkbenchTerminalShareActions({
   tab: WorkbenchTabView
   partner: WorkbenchTabView | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const source = shareSource(tab)
   if (!source) {
     return null
@@ -93,11 +94,11 @@ function WorkbenchTerminalShareActions({
         kind="share"
         label={
           partnerPane
-            ? translate(
+            ? t(
                 'components.workbenchWindow.WorkbenchTerminalShareActions.shareToPartner',
                 'Share Context to Other Pane…'
               )
-            : translate(
+            : t(
                 'components.workbenchWindow.WorkbenchTerminalShareActions.share',
                 'Share Context to Terminal…'
               )
@@ -108,11 +109,11 @@ function WorkbenchTerminalShareActions({
         kind="link"
         label={
           partnerPane
-            ? translate(
+            ? t(
                 'components.workbenchWindow.WorkbenchTerminalShareActions.linkToPartner',
                 'Link with Other Pane…'
               )
-            : translate(
+            : t(
                 'components.workbenchWindow.WorkbenchTerminalShareActions.link',
                 'Link with Terminal…'
               )

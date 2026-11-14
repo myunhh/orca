@@ -2,7 +2,7 @@ import { Loader2, PanelBottomClose, SquareSplitVertical } from 'lucide-react'
 import { AgentTerminalPreview } from '@/components/dashboard-popout/AgentTerminalPreview'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type {
   WorkbenchSplitDirection,
@@ -21,16 +21,11 @@ function PaneSplitButton({
   direction: WorkbenchSplitDirection
   onSplit: (direction: WorkbenchSplitDirection) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const label =
     direction === 'vertical'
-      ? translate(
-          'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
-          'Split Terminal Right'
-        )
-      : translate(
-          'auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2',
-          'Split Terminal Down'
-        )
+      ? t('auto.components.terminal.pane.TerminalContextMenu.20e565d865', 'Split Terminal Right')
+      : t('auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2', 'Split Terminal Down')
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -62,6 +57,7 @@ function WorkbenchTerminalPaneView({
   showFrame: boolean
   onSplitPane: SplitPane
 }): React.JSX.Element {
+  const t = useTranslate()
   // Why only a started pane: main splits from a live pane, the same as its own split button.
   const split = pane?.ptyId
     ? (direction: WorkbenchSplitDirection) => onSplitPane(pane.leafId, direction)
@@ -86,7 +82,7 @@ function WorkbenchTerminalPaneView({
       ) : (
         <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          {translate(
+          {t(
             'components.workbench.window.WorkbenchTerminalBody.starting',
             'Waiting for the terminal to start…'
           )}

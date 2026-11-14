@@ -91,6 +91,6 @@ async function unfinished(
       ...(held ? { held: true as const } : {})
     }
   }
-  deps.recordUnavailable(target, unavailable)
+  await deps.recordUnavailable(target, unavailable)
   return { route: 'unserved', reason: 'orcad_unavailable', detail: unavailable }
 }

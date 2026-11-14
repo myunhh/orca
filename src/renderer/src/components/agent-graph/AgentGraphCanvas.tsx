@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/agent-graph/agent-graph-types'
 import { formatSubagentTokens } from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
 import { cn } from '@/lib/class-names'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentStateDot } from '../AgentStateDot'
 import { agentGraphEdgeKindLabel, agentGraphStatusDotState } from './agent-graph-copy'
 import {
@@ -100,11 +100,12 @@ function AgentGraphNodeCard({
   kinds: AgentGraphConnector['kinds']
   onSelect: (nodeId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const dot = agentGraphStatusDotState(node.status)
   const Icon = node.role === 'workflow' ? Workflow : node.role === 'root' ? Network : Bot
   const exchange = kinds
     .map(({ kind, count }) =>
-      count > 1 ? `${agentGraphEdgeKindLabel(kind)} ×${count}` : agentGraphEdgeKindLabel(kind)
+      count > 1 ? `${agentGraphEdgeKindLabel(kind, t)} ×${count}` : agentGraphEdgeKindLabel(kind, t)
     )
     .join(' · ')
   return (
@@ -134,7 +135,7 @@ function AgentGraphNodeCard({
       <span className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
         <span className="min-w-0 flex-1 truncate">
           {node.role === 'root'
-            ? translate('components.agentGraph.AgentGraphCanvas.mainAgent', 'Main agent')
+            ? t('components.agentGraph.AgentGraphCanvas.mainAgent', 'Main agent')
             : (node.agentType ?? '')}
         </span>
         {exchange ? <span className="shrink-0">{exchange}</span> : null}

@@ -63,7 +63,7 @@ describe('which server an SSH host runs on connect', () => {
     // Release failed-conversion fences before direct source can serve again.
     expect(preflight.abandonConversion).toHaveBeenCalledWith(target)
 
-    const remembered = deps({ recordedUnavailable: () => 'unsupported_host' })
+    const remembered = deps({ recordedUnavailable: async () => 'unsupported_host' })
     await expect(resolveHostServerOnConnect(target, remembered)).resolves.toMatchObject({
       reason: 'orcad_unavailable'
     })

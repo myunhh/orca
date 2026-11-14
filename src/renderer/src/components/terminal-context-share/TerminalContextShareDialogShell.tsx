@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { TerminalContextShareSource } from './terminal-context-share-request'
 import {
   useTerminalContextShareEndpoints,
@@ -33,6 +33,7 @@ export function TerminalContextShareDialogShell({
   onClose: () => void
   children: (endpoints: ReadyEndpoints) => React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const loaded = useTerminalContextShareEndpoints(source)
   const endpoints = useMemo(
     () =>
@@ -51,23 +52,23 @@ export function TerminalContextShareDialogShell({
         {endpoints.status === 'loading' ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            {translate('components.terminalContextShare.loadingTerminals', 'Finding terminals…')}
+            {t('components.terminalContextShare.loadingTerminals', 'Finding terminals…')}
           </p>
         ) : endpoints.status === 'error' ? (
           <p role="alert" className="text-sm text-destructive">
             {endpoints.reason === 'source-unavailable'
-              ? translate(
+              ? t(
                   'components.terminalContextShare.sourceUnavailable',
                   'This terminal is not available to Orca right now.'
                 )
-              : translate(
+              : t(
                   'components.terminalContextShare.targetsUnavailable',
                   'Could not list terminals. Try again in a moment.'
                 )}
           </p>
         ) : endpoints.targets.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {translate(
+            {t(
               'components.terminalContextShare.noTargets',
               'Open another terminal to share with first.'
             )}

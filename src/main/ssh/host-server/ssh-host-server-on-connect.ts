@@ -80,8 +80,8 @@ export type HostServerOnConnectDeps = {
   /** Finish retained-source bookkeeping after late commit replies without deleting source rows; resolves how many moved automations the server kept off. */
   retainCommittedSource: (target: SshTarget) => Promise<number>
   hasTemplate: () => boolean
-  recordedUnavailable: (target: SshTarget) => string | null
-  recordUnavailable: (target: SshTarget, reason: string) => void
+  recordedUnavailable: (target: SshTarget) => Promise<string | null>
+  recordUnavailable: (target: SshTarget, reason: string) => Promise<void>
   isEmptyHost: (target: SshTarget) => boolean
   relayTerminals: (target: SshTarget) => Promise<HostServerTerminalVerdict>
   deploy: (target: SshTarget) => Promise<OrcadManagedDeployResult>
@@ -138,7 +138,7 @@ async function decide(
         deps.isFencedBeforeStaging(target)
       ) {
         await deps.releaseUnreachableSetup(target)
-        deps.recordUnavailable(target, ORCAD_TUNNEL_UNAVAILABLE_REASON)
+        await deps.recordUnavailable(target, ORCAD_TUNNEL_UNAVAILABLE_REASON)
         return {
           route: 'unserved',
           reason: 'orcad_unavailable',
@@ -172,7 +172,7 @@ async function decide(
       ...(automationsLeftDisabled > 0 ? { automationsLeftDisabled } : {})
     }
   }
-  const recorded = deps.recordedUnavailable(target)
+  const recorded = await deps.recordedUnavailable(target)
   if (recorded) {
     trace.recorded = true
     return { route: 'unserved', reason: 'orcad_unavailable', detail: recorded }

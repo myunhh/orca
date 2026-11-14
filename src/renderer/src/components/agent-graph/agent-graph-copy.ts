@@ -5,28 +5,28 @@ import type {
   AgentGraphMessage,
   AgentGraphNodeMessagesResult
 } from '../../../../shared/agent-graph/agent-graph-types'
-import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { AgentDotState } from '../AgentStateDot'
 
-export function agentGraphEdgeKindLabel(kind: AgentGraphEdgeKind): string {
+export function agentGraphEdgeKindLabel(kind: AgentGraphEdgeKind, t: Translate): string {
   switch (kind) {
     case 'spawn':
-      return translate('components.agentGraph.copy.edgeSpawn', 'spawn')
+      return t('components.agentGraph.copy.edgeSpawn', 'spawn')
     case 'message':
-      return translate('components.agentGraph.copy.edgeMessage', 'message')
+      return t('components.agentGraph.copy.edgeMessage', 'message')
     case 'result':
-      return translate('components.agentGraph.copy.edgeResult', 'result')
+      return t('components.agentGraph.copy.edgeResult', 'result')
   }
 }
 
-export function agentGraphMessageRoleLabel(role: AgentGraphMessage['role']): string {
+export function agentGraphMessageRoleLabel(role: AgentGraphMessage['role'], t: Translate): string {
   switch (role) {
     case 'user':
-      return translate('components.agentGraph.copy.roleUser', 'Prompt')
+      return t('components.agentGraph.copy.roleUser', 'Prompt')
     case 'assistant':
-      return translate('components.agentGraph.copy.roleAssistant', 'Reply')
+      return t('components.agentGraph.copy.roleAssistant', 'Reply')
     case 'tool':
-      return translate('components.agentGraph.copy.roleTool', 'Tool')
+      return t('components.agentGraph.copy.roleTool', 'Tool')
   }
 }
 
@@ -49,66 +49,64 @@ export function agentGraphStatusDotState(
 }
 
 export function agentGraphUnavailableCopy(
-  result: Extract<AgentGraphBuildResult, { ok: false }>
+  result: Extract<AgentGraphBuildResult, { ok: false }>,
+  t: Translate
 ): string {
   switch (result.reason) {
     case 'no-session':
-      return translate(
+      return t(
         'components.agentGraph.copy.noSession',
         'This pane has not reported an agent session transcript yet.'
       )
     case 'unsupported-agent':
-      return translate(
+      return t(
         'components.agentGraph.copy.unsupportedAgent',
         'Agent graphs support Claude Code, Codex, and OMP sessions.'
       )
     case 'remote-host':
-      return translate(
+      return t(
         'components.agentGraph.copy.remoteHost',
         'Agent graphs are not available for sessions on remote hosts yet.'
       )
     case 'not-admitted':
-      return translate(
+      return t(
         'components.agentGraph.copy.notAdmitted',
         'The session transcript is outside the known local session folders.'
       )
     case 'desktop-only':
-      return translate(
+      return t(
         'components.agentGraph.copy.desktopOnly',
         'Agent graphs are available in the desktop app.'
       )
     case 'unavailable':
-      return translate(
-        'components.agentGraph.copy.unavailable',
-        'Could not build the graph: {{detail}}',
-        {
-          detail: result.message
-        }
-      )
+      return t('components.agentGraph.copy.unavailable', 'Could not build the graph: {{detail}}', {
+        detail: result.message
+      })
   }
 }
 
 export function agentGraphNodeMessagesUnavailableCopy(
-  result: Extract<AgentGraphNodeMessagesResult, { ok: false }>
+  result: Extract<AgentGraphNodeMessagesResult, { ok: false }>,
+  t: Translate
 ): string {
   switch (result.reason) {
     case 'invalid':
-      return translate(
+      return t(
         'components.agentGraph.copy.transcriptInvalid',
         'This transcript request was not valid.'
       )
     case 'not-admitted':
-      return translate(
+      return t(
         'components.agentGraph.copy.transcriptNotAdmitted',
         'The transcript is outside the known local session folders.'
       )
     case 'desktop-only':
-      return translate(
+      return t(
         'components.agentGraph.copy.desktopOnly',
         'Agent graphs are available in the desktop app.'
       )
     case 'unavailable':
-      return translate(
+      return t(
         'components.agentGraph.copy.transcriptUnavailable',
         'Could not read the transcript: {{detail}}',
         { detail: result.message }
@@ -116,10 +114,8 @@ export function agentGraphNodeMessagesUnavailableCopy(
   }
 }
 
-export function agentGraphIssuesSummary(count: number): string {
-  return translate(
-    'components.agentGraph.copy.issues',
-    'Some transcripts could not be read ({{count}}).',
-    { count }
-  )
+export function agentGraphIssuesSummary(count: number, t: Translate): string {
+  return t('components.agentGraph.copy.issues', 'Some transcripts could not be read ({{count}}).', {
+    count
+  })
 }
