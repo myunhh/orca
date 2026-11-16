@@ -14,6 +14,7 @@ import type { TerminalMultiplexStream } from './terminal-stream-types'
 import type { MultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
 import type { TerminalMultiplexLinkEstimate } from './terminal-multiplex-link-estimate'
 import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal/stream/terminal-stream-end-verdict'
+import type { TerminalSourceRangeRegistry } from '../../terminal-source-range-registry'
 
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
 export type MultiplexSnapshotRequest = z.infer<typeof TerminalMultiplexSnapshotRequestFrame>
@@ -31,6 +32,7 @@ export type TerminalMultiplexConnectionBase = {
   closed: boolean
   cursor: number
   streams: Map<number, TerminalMultiplexStream>
+  sourceRangeRegistry: TerminalSourceRangeRegistry
   pendingPtyWaitControllers: Map<number, Set<AbortController>>
   ptyWaitAdmission: MultiplexPtyWaitAdmission
   ackTotalInFlightBytes: number
@@ -49,7 +51,8 @@ export type TerminalMultiplexFrameDelivery = {
     streamId: number,
     opcode: TerminalStreamOpcode,
     payload?: Uint8Array<ArrayBufferLike>,
-    frameSeq?: number
+    frameSeq?: number,
+    onRejected?: () => void
   ) => boolean
   sendStreamError: (streamId: number, message: string) => void
   notifyStreamWriteUnavailable: (
@@ -80,6 +83,13 @@ export type TerminalMultiplexFlowControl = {
   flushAckPendingOutput: (stream: TerminalMultiplexStream, maxChunks?: number) => number
   flushAllAckPendingOutput: () => void
   acknowledgeOutput: (stream: TerminalMultiplexStream, bytes: number) => void
+  acknowledgeSourceRanges: (
+    stream: TerminalMultiplexStream,
+    streamGeneration: string,
+    ackedEndByte: number
+  ) => void
+  detachSourceRangeConsumer: (stream: TerminalMultiplexStream, reason: string) => void
+  setOutputPaused: (stream: TerminalMultiplexStream, paused: boolean) => void
 }
 
 export type TerminalMultiplexCleanup = {

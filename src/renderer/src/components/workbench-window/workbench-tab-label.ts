@@ -3,6 +3,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { WORKBENCH_MAX_DISPLAY_TEXT_CHARS } from '../../../../shared/workbench-window/workbench-window-types'
 import { translate } from '@/i18n/i18n'
 import { getNotificationWorkspaceLabels } from '@/attention/notification-workspace-labels'
 import {
@@ -10,7 +11,10 @@ import {
   terminalTabActivityToAgentDotState
 } from '@/components/tab-bar/terminal-tab-activity-status'
 
-type LabelState = Pick<AppState, 'tabsByWorktree' | 'openFiles' | 'settings'>
+type LabelState = Pick<
+  AppState,
+  'tabsByWorktree' | 'browserTabsByWorktree' | 'openFiles' | 'settings'
+>
 
 /** Workspace names a workbench window shows; floating terminals have no worktree row to name them. */
 export function workbenchWorkspaceLabels(
@@ -76,7 +80,7 @@ export function workbenchTerminalAgentState(
   return terminalTabActivityToAgentDotState(activity)
 }
 
-/** The label the main tab strip shows for a terminal or editor tab; null while its row is missing. */
+/** The bounded display label a workbench window shows; null while its source row is missing. */
 export function workbenchTabLabel(state: LabelState, tab: Tab): string | null {
   const terminalTab = findTerminalTabRow(state, tab)
   if (terminalTab) {
@@ -84,6 +88,18 @@ export function workbenchTabLabel(state: LabelState, tab: Tab): string | null {
   }
   if (tab.contentType === 'terminal') {
     return null
+  }
+  if (tab.contentType === 'browser') {
+    const browser = state.browserTabsByWorktree[tab.worktreeId]?.find(
+      (candidate) => candidate.id === tab.entityId
+    )
+    return browser
+      ? resolveUnifiedTabLabel(
+          tab,
+          state.settings?.tabAutoGenerateTitle === true,
+          browser.label ?? browser.title
+        ).slice(0, WORKBENCH_MAX_DISPLAY_TEXT_CHARS)
+      : null
   }
   const file = state.openFiles.find((candidate) => candidate.id === tab.entityId)
   return file

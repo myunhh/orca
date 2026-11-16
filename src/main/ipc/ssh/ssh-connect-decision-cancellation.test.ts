@@ -12,7 +12,7 @@ vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../../ssh/protocol/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
-vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
+vi.mock('../../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 vi.mock(
   import('../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'),
   async (importOriginal) => ({
@@ -62,7 +62,8 @@ describe('a connect cancelled during its server decision', () => {
       label: 'Server',
       host: 'example.com',
       port: 22,
-      username: 'deploy'
+      username: 'deploy',
+      orcadFence: { environmentId: 'env-1' }
     }
     const opened = { id: 'managed-transport' }
     vi.mocked(publishManagedServerConnect).mockClear()
@@ -112,7 +113,10 @@ describe('a quiet retry of a bridged host move (#29626)', () => {
     vi.clearAllMocks()
     mockSshStore.getTarget.mockReturnValue(target)
     // The kept session is reused, never opened by the retry.
-    mockConnectionManager.getConnection.mockReturnValue({ id: 'kept-transport' })
+    mockConnectionManager.getConnection.mockReturnValue({
+      id: 'kept-transport',
+      getConnectGeneration: () => 1
+    })
     mockConnectionManager.getState.mockReturnValue({ targetId: 'ssh-1', status: 'connected' })
     setSshHostServerStatus('ssh-1', kept)
   })

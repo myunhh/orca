@@ -7,6 +7,7 @@ import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-w
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
+import { requireSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 
 export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerContext): void {
@@ -17,6 +18,13 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       _event,
       args: { worktreePath: string; name: string; startPoint: string; connectionId?: string }
     ) => {
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).createBranch(
+          args.worktreePath,
+          args.name,
+          args.startPoint
+        )
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return createBranch(worktreePath, args.name, args.startPoint, {
@@ -33,6 +41,13 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
         _event,
         args: { worktreePath: string; operation: GitCommitAction; connectionId?: string }
       ) => {
+        if (args.connectionId) {
+          return requireSshGitProvider(args.connectionId).recoverSequencer(
+            args.worktreePath,
+            args.operation,
+            action
+          )
+        }
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
         const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -54,6 +69,13 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
     ipcMain.handle(
       `git:${method}`,
       async (_event, args: { worktreePath: string; commitId: string; connectionId?: string }) => {
+        if (args.connectionId) {
+          return requireSshGitProvider(args.connectionId).applyCommit(
+            args.worktreePath,
+            operation,
+            args.commitId
+          )
+        }
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
         const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -78,6 +100,9 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       if (typeof args.message !== 'string' || args.message.trim().length === 0) {
         throw new Error('Commit message is required')
       }
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).commit(args.worktreePath, args.message)
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -97,6 +122,9 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       _event,
       args: { worktreePath: string; connectionId?: string }
     ): Promise<{ success: boolean; error?: string }> => {
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).completeMerge(args.worktreePath)
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(

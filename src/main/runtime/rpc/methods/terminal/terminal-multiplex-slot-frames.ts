@@ -5,7 +5,8 @@ import {
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TerminalMultiplexLegacyAckFrame,
-  TerminalMultiplexSnapshotRequestFrame
+  TerminalMultiplexSnapshotRequestFrame,
+  TerminalMultiplexSourceRangeAckFrame
 } from './stream-schemas'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 import { handleMultiplexInputFrame } from './terminal-multiplex-input-frame'
@@ -18,10 +19,7 @@ import {
   serializeBudgetedRequestedSnapshot
 } from './terminal-snapshot-publication'
 import { chainPassiveDesktopResize, updateViewportForClient } from './terminal-viewport-update'
-import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
-import { releaseAckPendingHoldbackIfDrained } from './terminal-multiplex-ack-window'
 import {
-  answerUndeliveredYieldedQueries,
   discardPendingMultiplexOutput,
   replaySnapshotCoveredStatelessQueries
 } from './terminal-multiplex-yielded-queries'
@@ -31,6 +29,10 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream, TerminalViewportClient } from './terminal-stream-types'
+import {
+  prepareTerminalSourceRangeSnapshot,
+  type TerminalSourceRangeSnapshotPublication
+} from './terminal-source-range-snapshot'
 
 function decodeViewportFrame(
   payload: TerminalStreamFrame['payload']
@@ -70,6 +72,17 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
     }
     if (frame.opcode === TerminalStreamOpcode.Ack) {
       const payload = decodeTerminalStreamJson<unknown>(frame.payload) ?? {}
+      if (stream.ackOutputSourceRanges) {
+        const parsed = TerminalMultiplexSourceRangeAckFrame.safeParse(payload)
+        if (parsed.success) {
+          state.acknowledgeSourceRanges(
+            stream,
+            parsed.data.streamGeneration,
+            parsed.data.ackedEndByte
+          )
+        }
+        return
+      }
       const parsed = TerminalMultiplexLegacyAckFrame.safeParse(payload)
       if (parsed.success) {
         state.acknowledgeOutput(stream, parsed.data.bytes)
@@ -85,26 +98,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       if (typeof payload?.paused !== 'boolean' || stream.outputPaused === payload.paused) {
         return
       }
-      if (payload.paused) {
-        // Why: main yielded these batched bytes' query replies to this view at ingestion, so deliver them rather than drop them.
-        stream.outputBatcher.flush()
-      }
-      stream.outputPaused = payload.paused
-      if (stream.outputPaused) {
-        stream.pausedOutputDropNoticeSent = false
-        const discardsQueuedOutput =
-          stream.ackPendingOutput.length > 0 || stream.ackPendingOutputOverflowed
-        stream.ackPendingOutput = []
-        stream.ackPendingOutputBytes = 0
-        stream.ackPendingOutputOverflowed = false
-        // Resumed output starts a new backlog; a stale label would seed slow rate samples.
-        stream.ackOutputWaited = false
-        releaseAckPendingHoldbackIfDrained(state, stream)
-        answerUndeliveredYieldedQueries(runtime, stream)
-        if (discardsQueuedOutput) {
-          notePausedOutputDropped(state, stream)
-        }
-      }
+      state.setOutputPaused(stream, payload.paused)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SetOutputCadence && stream.supportsOutputCadence) {
@@ -172,6 +166,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
     const requestId = request.requestId
     let sentSnapshotOutputSeq: number | undefined
     let sentSnapshotEscapeTail: string | undefined
+    let sourceReplacement: TerminalSourceRangeSnapshotPublication | null = null
     try {
       const scrollbackRows = normalizeMultiplexSnapshotScrollbackRows(request.scrollbackRows)
       let serialized = await serializeBudgetedRequestedSnapshot(
@@ -213,29 +208,38 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       }
       sentSnapshotOutputSeq = serialized?.seq
       sentSnapshotEscapeTail = serialized?.pendingEscapeTailAnsi
-      sendSnapshotFrames((opcode, payload) => state.sendFrame(stream.streamId, opcode, payload), {
-        kind: 'scrollback',
-        cols: serialized?.cols ?? size?.cols ?? 80,
-        rows: serialized?.rows ?? size?.rows ?? 24,
-        requestId,
-        displayMode,
-        seq: serialized?.seq,
-        cwd: serialized?.cwd,
-        source: serialized?.source,
-        kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
-        alternateScreen: serialized?.alternateScreen,
-        terminalOwner: serialized?.terminalOwner,
-        lastTitle: serialized?.lastTitle,
-        oscLinks: serialized?.oscLinks,
-        pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
-        truncated: false,
-        truncatedByByteBudget: serialized?.truncatedByByteBudget,
-        scrollbackRows: serialized?.scrollbackRows,
-        // No serializer answer does not prove emptiness; never publish an invented empty buffer.
-        unavailable: serialized ? undefined : 'no-serializable-buffer',
-        data: serialized?.data ?? ''
-      })
+      sourceReplacement =
+        typeof requestId !== 'number'
+          ? prepareTerminalSourceRangeSnapshot(state, stream, serialized, 'requested-snapshot')
+          : null
+      const publication = sendSnapshotFrames(
+        (opcode, payload) => state.sendFrame(stream.streamId, opcode, payload),
+        {
+          kind: 'scrollback',
+          cols: serialized?.cols ?? size?.cols ?? 80,
+          rows: serialized?.rows ?? size?.rows ?? 24,
+          requestId,
+          displayMode,
+          seq: serialized?.seq,
+          cwd: serialized?.cwd,
+          source: serialized?.source,
+          kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
+          alternateScreen: serialized?.alternateScreen,
+          terminalOwner: serialized?.terminalOwner,
+          lastTitle: serialized?.lastTitle,
+          oscLinks: serialized?.oscLinks,
+          pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
+          truncated: false,
+          truncatedByByteBudget: serialized?.truncatedByByteBudget,
+          scrollbackRows: serialized?.scrollbackRows,
+          // No serializer answer does not prove emptiness; never publish an invented empty buffer.
+          unavailable: serialized ? undefined : 'no-serializable-buffer',
+          data: serialized?.data ?? ''
+        }
+      )
+      sourceReplacement?.commit(publication.published)
     } catch (error) {
+      sourceReplacement?.rollback()
       state.sendStreamError(
         stream.streamId,
         error instanceof Error ? error.message : 'Remote terminal snapshot failed.'

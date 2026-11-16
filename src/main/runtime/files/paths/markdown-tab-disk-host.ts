@@ -1,7 +1,6 @@
-/** Local workspaces use local disk; runtime environments use their server's file RPCs/compare-write.
- * Raw SSH routes remain unsupported instead of falling back to client paths. */
+/** Disk access stays on the file's owner: local roots, direct SSH relay, or paired runtime. */
 import { isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import {
   compareDiskWritePrecondition,
   diskConflictFromReadFailure,
@@ -18,7 +17,7 @@ import { utf8ByteLength } from '../../../../shared/mobile-markdown-document'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { assertFileMutationOwnershipCapability } from '../../../../shared/file-write/file-mutation-ownership'
 import type { PersistedOpenFile } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { readLocalRuntimeFilePrefix } from '../file-reads'
+import { readLocalRuntimeFilePrefix } from '../local-file-reads'
 import {
   requireLocalRuntimeFileRoute,
   requireRuntimeFileProvider,
@@ -31,7 +30,12 @@ import type {
   MarkdownTabDiskHost
 } from './markdown-tab-disk-documents'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
+import { requireSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
+import type { IFilesystemProvider } from '../../../providers/filesystem-provider-contract'
+import {
+  assertSshMutationExpectation,
+  getSshConnectionGeneration
+} from '../../../ssh/connection/authority/ssh-connection-generation'
 
 type EnvironmentCall = (
   environmentId: string,
@@ -51,19 +55,40 @@ export type MarkdownTabDiskRuntime = RuntimeLocalFileHost &
 type MarkdownFileRoute =
   | { environmentId: string; pairingRevision: number | undefined }
   | { environmentId: null; target: ResolvedRuntimeFileTarget }
+  | {
+      environmentId: null
+      ssh: { connectionId: string; provider: IFilesystemProvider; generation: number }
+    }
 
 export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): MarkdownTabDiskHost {
   const routeOf = async (
     worktreeId: string,
     file: MarkdownFileAddress
   ): Promise<MarkdownFileRoute> => {
-    if (file.externalSshTargetId) {
-      throw new SshHostNotServedError(file.externalSshTargetId)
-    }
     const target = await runtime.resolveRuntimeFileTarget(`id:${worktreeId}`)
     const host = parseExecutionHostId(target.executionHostId)
     if (host?.kind === 'runtime') {
       return { environmentId: host.environmentId, pairingRevision: undefined }
+    }
+    if (file.externalSshTargetId) {
+      return {
+        environmentId: null,
+        ssh: {
+          connectionId: file.externalSshTargetId,
+          provider: requireSshFilesystemProvider(file.externalSshTargetId),
+          generation: getSshConnectionGeneration(file.externalSshTargetId)
+        }
+      }
+    }
+    if (host?.kind === 'ssh') {
+      return {
+        environmentId: null,
+        ssh: {
+          connectionId: host.targetId,
+          provider: requireSshFilesystemProvider(host.targetId),
+          generation: getSshConnectionGeneration(host.targetId)
+        }
+      }
     }
     requireLocalRuntimeFileRoute(target)
     return { environmentId: null, target }
@@ -81,6 +106,20 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
           file,
           route.pairingRevision
         )
+      }
+      if ('ssh' in route) {
+        const info = await route.ssh.provider.stat(file.filePath)
+        if (info.type !== 'file') {
+          throw new Error('not_a_file')
+        }
+        if (info.size > maxBytes) {
+          return { content: '', byteLength: info.size }
+        }
+        const result = await route.ssh.provider.readFile(file.filePath, { maxTextBytes: maxBytes })
+        if (result.isBinary) {
+          throw new Error('binary_file')
+        }
+        return { content: result.content, byteLength: info.size }
       }
       const { bytes, size } = await readLocalRuntimeFilePrefix(
         file.filePath,
@@ -105,11 +144,27 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
           precondition
         )
       }
-      return requireRuntimeFileProvider(route.target, runtime).writeFileWithDiskPrecondition(
-        file.filePath,
-        content,
-        precondition
-      )
+      if ('ssh' in route) {
+        assertSshMutationExpectation(
+          route.ssh.connectionId,
+          route.ssh.connectionId,
+          route.ssh.generation,
+          toSshExecutionHostId(route.ssh.connectionId)
+        )
+        if (!route.ssh.provider.writeFileWithDiskPrecondition) {
+          throw new Error('Safe Markdown saves require a newer SSH relay')
+        }
+        return route.ssh.provider.writeFileWithDiskPrecondition(
+          file.filePath,
+          content,
+          precondition
+        )
+      }
+      const provider = requireRuntimeFileProvider(route.target, runtime)
+      if (!provider.writeFileWithDiskPrecondition) {
+        throw new Error('Safe Markdown saves are unavailable on this host')
+      }
+      return provider.writeFileWithDiskPrecondition(file.filePath, content, precondition)
     }
   })
   return {

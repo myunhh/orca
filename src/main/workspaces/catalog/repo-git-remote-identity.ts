@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import {
   deriveGitRemoteIdentity,
@@ -6,6 +6,7 @@ import {
 } from '../../../shared/git/remotes/git-remote-identity'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
+import { requireSshGitProvider } from '../../providers/ssh-git-dispatch'
 
 // Bound probes on hung network mounts or WSL; timeouts remain unavailable and retry later.
 const LOCAL_PROBE_TIMEOUT_MS = 5000
@@ -34,8 +35,14 @@ export async function runGitProbeOnHost(
   executionHostId: ExecutionHostId,
   options: GitRemoteIdentityProbeOptions = {}
 ): Promise<{ stdout: string } | null> {
-  // Runtime and SSH targets must not fall back to this machine's git.
-  if (resolveGitRouteForHost(executionHostId).kind !== 'local') {
+  const route = resolveGitRouteForHost(executionHostId)
+  if (route.kind === 'ssh') {
+    return requireSshGitProvider(route.connectionId).exec(args, repoPath, {
+      signal: options.signal,
+      timeoutMs: options.timeoutMs ?? LOCAL_PROBE_TIMEOUT_MS
+    })
+  }
+  if (route.kind !== 'local') {
     return null
   }
   return gitExecFileAsync(args, {
@@ -77,13 +84,13 @@ export async function detectGitRemoteIdentity(
 }
 
 export async function readCurrentGitRemoteIdentity(
-  repo: Pick<Repo, 'path' | 'kind' | 'gitRemoteIdentity'>
+  repo: Pick<Repo, 'path' | 'kind' | 'gitRemoteIdentity' | 'executionHostId' | 'connectionId'>
 ): Promise<Pick<Repo, 'gitRemoteIdentity'>> {
   if (repo.kind === 'folder') {
     return { gitRemoteIdentity: null }
   }
-  // Both setup paths register files in this process.
-  const probe = await probeGitRemoteIdentity(repo.path, LOCAL_EXECUTION_HOST_ID)
+  const hostId = getRepoExecutionHostId(repo)
+  const probe = await probeGitRemoteIdentity(repo.path, hostId)
   if (probe.status === 'resolved') {
     return { gitRemoteIdentity: probe.identity }
   }

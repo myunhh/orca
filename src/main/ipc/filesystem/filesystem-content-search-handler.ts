@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import type { SearchOptions, SearchResult } from '../../../shared/file-search/code-search-types'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
+import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { resolveDesktopAuthorizedPath } from './access/local-file-access-resolution'
 import { createSenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
 import { stopBundledRipgrep } from '../../ripgrep/bundled-ripgrep-stop'
@@ -28,8 +28,8 @@ export function registerFilesystemContentSearchHandler(context: FilesystemHandle
       const { requestToken: _requestToken, connectionId: _connectionId, ...options } = args
       try {
         throwIfSignalAborted(signal)
-        if (args.connectionId) {
-          throw new SshHostNotServedError(args.connectionId)
+        if (args.connectionId != null) {
+          return await requireSshFilesystemProvider(args.connectionId).search(options, { signal })
         }
         const rootPath = await waitForPromiseWithSignal(
           resolveDesktopAuthorizedPath(args.rootPath, store),

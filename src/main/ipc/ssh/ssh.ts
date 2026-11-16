@@ -79,6 +79,11 @@ import {
   disposeDesktopBrowserBridge,
   installDesktopBrowserBridge
 } from '../browser/desktop-browser-bridge-wiring'
+import { activeSessions } from './ssh-active-relay-sessions'
+import { refreshActiveRelaySessions } from './ssh-relay-session-callbacks'
+import { clearRelayLostBackoff } from './ssh-relay-lost-backoff'
+import { relayStateOverrides } from './ssh-renderer-broadcast'
+import { forgetRelayTransportState } from './ssh-relay-transport-state'
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
@@ -160,6 +165,7 @@ export function registerSshHandlers(
   registerPowerMonitorReconnect(() => getAppEnvironment().getPath('userData'))
   registerSshBrowseHandler(() => connectionManager)
   setSshConnectionManagerResolver(() => connectionManager)
+  refreshActiveRelaySessions()
 
   registerSshTargetCrudHandlers()
   registerSshConnectionHandlers()
@@ -206,6 +212,13 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   }
   ipcMain.removeHandler('ssh:submitCredential')
 
+  const relayDetach = [...activeSessions].map(([targetId, session]) => {
+    clearRelayLostBackoff(targetId)
+    forgetRelayTransportState(targetId)
+    return session.detachAndPersist()
+  })
+  activeSessions.clear()
+  relayStateOverrides.clear()
   connectInFlight.clear()
   targetLifecycleInFlight.clear()
   resetSshConnectionGenerations()
@@ -220,6 +233,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   resetSshShutdownDrain()
 
   disposeDesktopBrowserBridge()
+  await Promise.all(relayDetach)
   await connectionManager?.disconnectAll()
   disposeOrcadManagedTunnels()
   portForwardManager?.dispose()

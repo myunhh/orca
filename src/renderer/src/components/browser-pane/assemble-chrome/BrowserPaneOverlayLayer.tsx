@@ -36,6 +36,7 @@ type BrowserOverlaySlotProps = {
   // Why: undefined = orphan tab (in browserTabs but not referenced by any group's unified-tab list); the fallback branch keeps these hidden.
   groupId: string | undefined
   isActive: boolean
+  detached: boolean
   chromeShortcutScope: BrowserChromeShortcutScope
   // Why: overlay is a sibling of the group layout, so pane focus doesn't bubble to TabGroupPanel; re-sync it here or split-view clicks leave activeGroupIdByWorktree stale.
   onFocusOwningGroup: ((groupId: string) => void) | undefined
@@ -47,6 +48,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   isWorktreeActive,
   groupId,
   isActive,
+  detached,
   chromeShortcutScope,
   onFocusOwningGroup
 }: BrowserOverlaySlotProps): React.JSX.Element {
@@ -64,7 +66,8 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       : [browserTab.activePageId ?? browserTab.id]
   const needsGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const isMountAdmitted = useAnyBrowserPageMountAdmission(browserPageIds)
-  const isPaintable = isActive || needsGuestPaint || isMountAdmitted
+  const isRendering = isActive || detached
+  const isPaintable = isRendering || needsGuestPaint || isMountAdmitted
   // Anchor changes move tabs without reparenting guests; unassigned orphans stay hidden.
   const style: React.CSSProperties = useMemo(
     () =>
@@ -92,25 +95,31 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
     [anchorName, isActive, isPaintable]
   )
   const handleFocus = useCallback(() => {
-    if (groupId !== undefined && onFocusOwningGroup) {
+    if (isActive && groupId !== undefined && onFocusOwningGroup) {
       onFocusOwningGroup(groupId)
     }
-  }, [groupId, onFocusOwningGroup])
+  }, [groupId, isActive, onFocusOwningGroup])
 
   return (
     <div
       style={style}
       className="relative flex min-h-0 flex-1 flex-col"
       data-browser-overlay-tab-id={browserTab.id}
+      inert={!isActive}
+      aria-hidden={!isActive}
       onPointerDown={handleFocus}
       onFocusCapture={handleFocus}
     >
       <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
-      <DeferredBrowserContent mountEligible={isPaintable} retainMounted={isWorktreeActive}>
+      <DeferredBrowserContent
+        mountEligible={isPaintable}
+        retainMounted={isWorktreeActive || detached}
+      >
         <BrowserPane
           browserTab={browserTab}
-          isWorktreeActive={isWorktreeActive}
+          isWorktreeActive={isWorktreeActive || detached}
           isActive={isActive}
+          isRendering={isRendering}
           chromeShortcutScope={chromeShortcutScope}
         />
       </DeferredBrowserContent>
@@ -135,6 +144,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
       focusedGroupId: state.activeGroupIdByWorktree[worktreeId]
     }))
   )
+  const detachedByTabId = useAppStore((state) => state.detachedWindowIdByTabId)
   const focusGroup = useAppStore((state) => state.focusGroup)
   const isFloatingWorkspace = isFloatingWorkspaceId(worktreeId)
   const knownFocusedGroupId = useMemo(
@@ -184,12 +194,14 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     return window.api.ui.onBrowserPagePointerDown(({ browserPageId }) => {
       const state = useAppStore.getState()
       const owner = resolveBrowserWorkspaceOwner(state, browserPageId, worktreeId)
-      const groupId = owner
+      const tab = owner
         ? state.unifiedTabsByWorktree[worktreeId]?.find(
-            (tab) => tab.contentType === 'browser' && tab.entityId === owner.workspaceId
-          )?.groupId
+            (candidate) =>
+              candidate.contentType === 'browser' && candidate.entityId === owner.workspaceId
+          )
         : undefined
-      if (groupId) {
+      const groupId = tab?.groupId
+      if (groupId && tab && !state.detachedWindowIdByTabId[tab.id]) {
         focusOwningGroup(groupId)
       }
     })
@@ -199,21 +211,26 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     <>
       {browserTabs.map((browserTab) => {
         const assignment = assignments.get(browserTab.id)
-        const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
+        const detached = unifiedTabs.some(
+          (tab) => tab.entityId === browserTab.id && detachedByTabId[tab.id] !== undefined
+        )
+        const isActive =
+          !detached && Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
         const inFocusedGroup =
           knownFocusedGroupId !== undefined && assignment?.groupId === knownFocusedGroupId
-        const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
-          ? 'inactive'
-          : // Why: 'focused' means the main window's focused split, so a floating browser answers only its own chords.
-            isFloatingWorkspace
-            ? inFocusedGroup
-              ? 'owned-target-focused'
-              : 'owned-target'
-            : knownFocusedGroupId === undefined
-              ? 'owned-target'
-              : inFocusedGroup
-                ? 'focused'
-                : 'inactive'
+        const chromeShortcutScope: BrowserChromeShortcutScope =
+          !isActive || detached
+            ? 'inactive'
+            : // Why: 'focused' means the main window's focused split, so a floating browser answers only its own chords.
+              isFloatingWorkspace
+              ? inFocusedGroup
+                ? 'owned-target-focused'
+                : 'owned-target'
+              : knownFocusedGroupId === undefined
+                ? 'owned-target'
+                : inFocusedGroup
+                  ? 'focused'
+                  : 'inactive'
         return (
           <BrowserOverlaySlot
             key={browserTab.id}
@@ -221,6 +238,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
             isWorktreeActive={isWorktreeActive}
             groupId={assignment?.groupId}
             isActive={isActive}
+            detached={detached}
             chromeShortcutScope={chromeShortcutScope}
             onFocusOwningGroup={focusOwningGroup}
           />

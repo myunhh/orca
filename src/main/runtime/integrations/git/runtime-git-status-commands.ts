@@ -22,12 +22,13 @@ import type {
 import type { GitProviderStatusOptions } from '../../../providers/git-provider-status-options'
 import {
   localGitOptionsForTarget,
-  requireLocalRuntimeGitRoute,
   requireRuntimeGitProvider,
+  runtimeGitRouteForTarget,
   type RuntimeGitCommandHost,
   type RuntimeGitTarget
 } from './runtime-git-command-target'
 import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 
 // Followers nobody is looking at: a stopped distro must stay stopped for them (E9).
 async function resolveGatedGitTarget(
@@ -95,7 +96,10 @@ export class RuntimeGitStatusCommands {
 
   async getRuntimeGitMutationInFlight(worktreeSelector: string): Promise<GitMutationInFlight> {
     const target = await resolveGatedGitTarget(this.host, worktreeSelector)
-    requireLocalRuntimeGitRoute(target)
+    const route = runtimeGitRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      return requireSshGitProvider(route.connectionId).getMutationInFlight(target.worktree.path)
+    }
     return {
       inFlight: await isGitWorktreeMutationInFlight(
         target.worktree.path,
@@ -113,6 +117,23 @@ export class RuntimeGitStatusCommands {
     const provider = requireRuntimeGitProvider(target)
     const worktreePath = target.worktree.path
     const checkoutTarget = detached ? branch.toLowerCase() : branch
+    const route = runtimeGitRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      try {
+        const result = await requireSshGitProvider(route.connectionId).switchBranch(
+          worktreePath,
+          detached ? { commitId: checkoutTarget } : checkoutTarget,
+          (await this.host.getAgentSwitchBlocker?.(worktreePath)) ?? null
+        )
+        await this.host.recordBranchSwitched?.(target.worktree, detached)
+        return { ok: true, branch: result.branch }
+      } catch (error) {
+        if (error instanceof BranchSwitchLandedWithWarningError) {
+          await this.host.recordBranchSwitched?.(target.worktree, detached)
+        }
+        throw error
+      }
+    }
     const result = await switchBranchGuarded(
       worktreePath,
       detached ? { commitId: checkoutTarget } : checkoutTarget,
@@ -139,6 +160,16 @@ export class RuntimeGitStatusCommands {
     const provider = requireRuntimeGitProvider(target)
     const path = target.worktree.path
     try {
+      const route = runtimeGitRouteForTarget(target)
+      if (route.kind === 'ssh') {
+        const result = await requireSshGitProvider(route.connectionId).switchBranch(
+          path,
+          branchTarget,
+          (await this.host.getAgentSwitchBlocker?.(path)) ?? null
+        )
+        await this.host.recordBranchSwitched?.(target.worktree)
+        return { ok: true, branch: result.branch, head: result.head }
+      }
       const result = await switchBranchGuarded(
         path,
         branchTarget,
@@ -157,6 +188,9 @@ export class RuntimeGitStatusCommands {
       return { ok: true, branch: result.branch, head: result.head }
     } catch (error) {
       if (error instanceof BranchSwitchLandedWithWarningError) {
+        if (runtimeGitRouteForTarget(target).kind === 'ssh') {
+          await this.host.recordBranchSwitched?.(target.worktree)
+        }
         return { ok: true, branch: error.branch, head: error.head, warning: error.message }
       }
       throw error

@@ -1,4 +1,4 @@
-/** ssh: identifies a target this process cannot serve; managed servers route through runtime:. */
+/** Missing direct-SSH providers must fail closed; managed workspaces still route through runtime:. */
 export const SSH_HOST_NOT_SERVED_MESSAGE =
   'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 

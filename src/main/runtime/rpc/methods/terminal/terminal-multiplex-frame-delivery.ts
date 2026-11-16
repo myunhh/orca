@@ -33,9 +33,11 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     streamId: number,
     opcode: TerminalStreamOpcode,
     payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
-    seq?: number
+    seq?: number,
+    onRejected?: () => void
   ): boolean => {
     if (state.closed) {
+      onRejected?.()
       return false
     }
     // Seq-less Output uses sentinel zero; a control cursor would corrupt client drop tracking.
@@ -50,10 +52,12 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
         }
       )
     } catch {
+      onRejected?.()
       state.closeMultiplex()
       return false
     }
     if (sent === false) {
+      onRejected?.()
       // False means transport discarded the frame; only reconnect supplies an authoritative retry snapshot.
       state.closeMultiplex()
       return false
@@ -110,20 +114,45 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     if (!stream.ackOutput) {
       return true
     }
-    return ackWindowAdmits(state, stream, bytes)
+    return (
+      ackWindowAdmits(state, stream, bytes) &&
+      (!stream.ackOutputSourceRanges || stream.sourceRangeLedger?.canAccept(bytes) === true)
+    )
   }
   state.sendAckGatedOutput = (
     stream: TerminalMultiplexStream,
     chunk: TerminalOutputFrameChunk,
     fromBacklog = false
   ): boolean => {
+    const prepared = stream.ackOutputSourceRanges
+      ? stream.sourceRangeLedger?.prepareAccept(
+          chunk.bytes.byteLength,
+          chunk.displayLength,
+          chunk.sourceRanges ?? [],
+          chunk.seq,
+          chunk.replayedQuery !== undefined || chunk.replayedEscapeTail === true
+        )
+      : undefined
+    if (stream.ackOutputSourceRanges && prepared?.status !== 'ready') {
+      if (prepared?.status !== 'capacity') {
+        state.detachStream(stream.streamId, 'unverifiable')
+      }
+      return false
+    }
+    const admission = prepared?.status === 'ready' ? prepared.admission : undefined
     const sent = state.sendFrame(
       stream.streamId,
       chunk.opcode ?? TerminalStreamOpcode.Output,
       chunk.bytes,
-      chunk.seq
+      chunk.seq,
+      admission?.rollback
     )
     if (!sent) {
+      return false
+    }
+    if (admission && !admission.commit()) {
+      admission.rollback()
+      state.detachStream(stream.streamId, 'unverifiable')
       return false
     }
     if (chunk.replayedQuery) {

@@ -6,6 +6,7 @@ import type {
 import { getHistory, getHistoryRefs } from '../../git/source-control/history'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
+import { requireSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 
@@ -13,6 +14,12 @@ export function registerFilesystemGitHistoryHandlers({ store }: FilesystemHandle
   ipcMain.handle(
     'git:refs',
     async (_event, args: { worktreePath: string; connectionId?: string; query?: string }) => {
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).getHistoryRefs(
+          args.worktreePath,
+          args.query
+        )
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       return readWorktreeGitUnlessWslStopped(
         store,
@@ -41,6 +48,9 @@ export function registerFilesystemGitHistoryHandlers({ store }: FilesystemHandle
         refs: args.refs,
         historyToken: args.historyToken,
         skip: args.skip
+      }
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).getHistory(args.worktreePath, options)
       }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       return readWorktreeGitUnlessWslStopped(

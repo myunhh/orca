@@ -26,9 +26,16 @@ import type {
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
 import type { WslMovedProject } from '../../shared/wsl-move/wsl-moved-project'
 import type { HostRepoCatalogSnapshot } from '../../shared/host-repo-catalog-snapshot'
+import type {
+  HostRepoCatalogSnapshot as DirectSshHostRepoCatalogSnapshot,
+  ListReposForExecutionHostArgs
+} from '../../shared/host-repo-catalog-contract'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
+  listForExecutionHost: (
+    args: ListReposForExecutionHostArgs
+  ) => Promise<DirectSshHostRepoCatalogSnapshot>
   /** Local projects a WSL host now owns: read-only, listed only for their existing chats. */
   listWslMoved: () => Promise<WslMovedProject[]>
   /** Saved WSL host project lists by environment id; desktop-only, never contacts a host. */

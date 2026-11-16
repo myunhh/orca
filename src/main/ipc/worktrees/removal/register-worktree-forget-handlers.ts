@@ -20,9 +20,11 @@ import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cach
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   notifyWorktreesChanged,
-  cleanupUnusedWorktreePushTargetRemote
+  cleanupUnusedWorktreePushTargetRemote,
+  cleanupUnusedWorktreePushTargetRemoteSsh
 } from '../../worktree-remote'
-import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
+import { resolveWorktreeRemovalRoute } from '../../../workspaces/removal/worktree-removal-execution-host-route'
+import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { forceDeleteLocalBranch } from '../../../git/worktrees/removal/worktree-branch-removal'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
@@ -185,8 +187,27 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
         throw new Error('Folder workspaces do not have local Git branches.')
       }
 
-      if (repo.connectionId) {
-        throw new SshHostNotServedError(repo.connectionId)
+      const route = resolveWorktreeRemovalRoute(getRepoExecutionHostId(repo))
+      if (route.kind === 'ssh') {
+        await route.provider.forceDeletePreservedBranch(
+          repo.path,
+          cleanupTarget.branchName,
+          cleanupTarget.head
+        )
+        await cleanupUnusedWorktreePushTargetRemoteSsh(
+          route.provider,
+          repo.path,
+          hostWorktreeTargetForRepo(args.worktreeId, repo),
+          cleanupTarget.pushTarget,
+          store
+        )
+        preservedBranchCleanupByScope.delete(
+          preservedBranchCleanupScopeKey({
+            worktreeId: args.worktreeId,
+            hostId: cleanupTarget.hostId
+          })
+        )
+        return { deleted: true }
       }
       const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
       const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0

@@ -35,11 +35,13 @@ import {
 export default function BrowserPane({
   browserTab,
   isActive,
+  isRendering = isActive,
   isWorktreeActive = true,
   chromeShortcutScope
 }: {
   browserTab: BrowserWorkspaceState
   isActive: boolean
+  isRendering?: boolean
   isWorktreeActive?: boolean
   chromeShortcutScope?: BrowserChromeShortcutScope
 }): React.JSX.Element {
@@ -146,6 +148,7 @@ export default function BrowserPane({
           runtimeEnvironmentId={activeBrowserRuntimeEnvironmentId}
           worktreeId={browserTab.worktreeId}
           isActive={isActive}
+          isRendering={isRendering}
           chromeShortcutScope={resolvedChromeShortcutScope}
           onUpdatePageState={updateBrowserPageState}
           onSetUrl={setBrowserPageUrl}
@@ -177,7 +180,7 @@ export default function BrowserPane({
                   retainMounted={isWorktreeActive}
                   mountEligible={isBrowserPagePanePaintable({
                     isActive:
-                      (isActive && page.id === activeBrowserPageId) ||
+                      (isRendering && page.id === activeBrowserPageId) ||
                       (hasAdmittedPage && isBrowserPageMountAdmitted(page.id)),
                     isAutomationVisible: automationVisiblePageIds.has(page.id),
                     isMobileDriven: mobileDrivenPageIds.has(page.id),
@@ -202,7 +205,10 @@ export default function BrowserPane({
                       }
                       isAutomationVisible={automationVisiblePageIds.has(page.id)}
                       isMobileDriven={mobileDrivenPageIds.has(page.id)}
-                      isRemotelyViewed={remotelyViewedPageIds.has(page.id)}
+                      isRemotelyViewed={
+                        remotelyViewedPageIds.has(page.id) ||
+                        (isRendering && !isActive && page.id === activeBrowserPageId)
+                      }
                       inputLocked={activeBrowserDriver.kind === 'mobile'}
                       onUpdatePageState={updateBrowserPageState}
                       onSetUrl={setBrowserPageUrl}

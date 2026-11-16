@@ -20,6 +20,8 @@ import {
 } from '../file-target'
 import { basenameFromRelativePath } from '../file-paths'
 import { RuntimeMobileFilePathSearchCache } from './mobile-path-search'
+import { limitQuickOpenFilesBySerializedBytes } from '../../../../shared/quick-open/quick-open-transport-budget'
+import { requireSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 
@@ -55,10 +57,12 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
-    // Unsupported SSH hosts return empty, never this machine's files.
     const files =
       route.kind === 'ssh'
-        ? []
+        ? await requireSshFilesystemProvider(route.connectionId).listFiles(worktree.path, {
+            signal: options.signal,
+            maxResults: MOBILE_FILE_LIST_LIMIT + 1
+          })
         : await listQuickOpenFiles(
             worktree.path,
             store,
@@ -99,7 +103,9 @@ export class RuntimeFileSearch {
     const inventory = await this.mobileFilePathSearchCache.get(cacheKey, async () => {
       const listed =
         route.kind === 'ssh'
-          ? []
+          ? await requireSshFilesystemProvider(route.connectionId).listFiles(worktree.path, {
+              maxResults: MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+            })
           : await listQuickOpenFiles(
               worktree.path,
               store,
@@ -150,17 +156,36 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
-    const quickOpenSearchVersion = route.kind === 'ssh' ? 0 : QUICK_OPEN_SEARCH_VERSION
-    const result =
-      !query.trim() || isQuickOpenQueryTooLarge(query) || route.kind === 'ssh'
-        ? { paths: [], totalCount: 0, truncated: false }
-        : await searchHostQuickOpenFilePaths(worktree.path, this.host.requireStore(), {
-            ...options,
-            query,
-            limit,
-            excludePaths,
-            signal
-          })
+    let quickOpenSearchVersion = QUICK_OPEN_SEARCH_VERSION
+    let result: { paths: string[]; totalCount: number; truncated: boolean }
+    if (!query.trim() || isQuickOpenQueryTooLarge(query)) {
+      result = { paths: [], totalCount: 0, truncated: false }
+    } else if (route.kind === 'ssh') {
+      const provider = requireSshFilesystemProvider(route.connectionId)
+      const supportsSearch = await provider.supportsQuickOpenSearch?.({ signal })
+      quickOpenSearchVersion = supportsSearch ? QUICK_OPEN_SEARCH_VERSION : 0
+      const paths = await provider.listFiles(worktree.path, {
+        excludePaths,
+        signal,
+        includeIgnored: options.includeIgnored,
+        followSymlinks: options.followSymlinks,
+        ...(supportsSearch ? { searchQuery: query } : {})
+      })
+      const ranker = new QuickOpenPathRanker(query, limit)
+      for (const path of paths) {
+        ranker.consider(path)
+      }
+      const ranked = ranker.result()
+      result = { ...ranked, truncated: ranked.totalCount > limit }
+    } else {
+      result = await searchHostQuickOpenFilePaths(worktree.path, this.host.requireStore(), {
+        ...options,
+        query,
+        limit,
+        excludePaths,
+        signal
+      })
+    }
     return {
       worktree: worktree.id,
       rootPath: worktree.path,
@@ -207,7 +232,13 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const route = runtimeFileRouteForTarget(target)
     if (route.kind === 'ssh') {
-      return []
+      const files = await requireSshFilesystemProvider(route.connectionId).listFiles(
+        target.worktree.path,
+        options
+      )
+      return options.maxContentBytes === undefined
+        ? files
+        : limitQuickOpenFilesBySerializedBytes(files, options.maxContentBytes)
     }
     return listQuickOpenFiles(
       target.worktree.path,

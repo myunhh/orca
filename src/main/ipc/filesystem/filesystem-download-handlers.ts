@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { open, writeFile } from 'node:fs/promises'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
+import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { sanitizeLocalDownloadFilename } from './local-download-filename'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -14,6 +14,11 @@ import {
   createSiblingTransferPath,
   type DownloadFileResult
 } from './filesystem-download-promotion'
+import { getRuntimePathBasename } from '../../../shared/cross-platform-path'
+import { join } from 'node:path'
+import { rm, stat } from 'node:fs/promises'
+import { isENOENT } from './access/filesystem-path-containment'
+import { promoteLocalDownloadedFolder } from './local-downloaded-folder-promotion'
 
 function validateRequiredString(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -27,19 +32,101 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
 
   ipcMain.handle(
     'fs:downloadFile',
-    async (_event, args: { filePath?: string; connectionId?: string }): Promise<never> => {
-      validateRequiredString(args?.filePath, 'filePath')
+    async (
+      event,
+      args: { filePath?: string; connectionId?: string }
+    ): Promise<DownloadFileResult> => {
+      const filePath = validateRequiredString(args?.filePath, 'filePath')
       const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
-      throw new SshHostNotServedError(connectionId)
+      const provider = requireSshFilesystemProvider(connectionId)
+      if (!provider.downloadFile) {
+        throw new Error('Remote file download is unavailable on this SSH connection')
+      }
+      const lifetime = abortWhenRendererGone(event.sender)
+      let tempPath: string | null = null
+      try {
+        const info = await provider.stat(filePath)
+        if (info.type === 'directory') {
+          throw new Error('Cannot download a directory')
+        }
+        lifetime.signal.throwIfAborted()
+        const options = {
+          defaultPath: sanitizeLocalDownloadFilename(getRuntimePathBasename(filePath))
+        }
+        const window = BrowserWindow.fromWebContents(event.sender)
+        const picked = window
+          ? await dialog.showSaveDialog(window, options)
+          : await dialog.showSaveDialog(options)
+        if (picked.canceled || !picked.filePath) {
+          return { canceled: true }
+        }
+        lifetime.signal.throwIfAborted()
+        const destinationPath = picked.filePath
+        const { existed } = await inspectDownloadDestination(destinationPath)
+        tempPath = createSiblingTransferPath(destinationPath, 'download')
+        await provider.downloadFile(filePath, tempPath)
+        lifetime.signal.throwIfAborted()
+        await promoteDownloadedFile(tempPath, destinationPath, existed)
+        tempPath = null
+        return { canceled: false, destinationPath }
+      } finally {
+        lifetime.dispose()
+        await cleanupLocalTransferPath(tempPath)
+      }
     }
   )
 
   ipcMain.handle(
     'fs:downloadFolder',
-    async (_event, args: { dirPath?: string; connectionId?: string }): Promise<never> => {
-      validateRequiredString(args?.dirPath, 'dirPath')
+    async (
+      event,
+      args: { dirPath?: string; connectionId?: string }
+    ): Promise<DownloadFileResult> => {
+      const dirPath = validateRequiredString(args?.dirPath, 'dirPath')
       const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
-      throw new SshHostNotServedError(connectionId)
+      const provider = requireSshFilesystemProvider(connectionId)
+      if (!provider.downloadFolder) {
+        throw new Error('Remote folder download is unavailable on this SSH connection')
+      }
+      const lifetime = abortWhenRendererGone(event.sender)
+      let tempPath: string | null = null
+      try {
+        lifetime.signal.throwIfAborted()
+        const options: Electron.OpenDialogOptions = {
+          properties: ['openDirectory', 'createDirectory']
+        }
+        const window = BrowserWindow.fromWebContents(event.sender)
+        const picked = window
+          ? await dialog.showOpenDialog(window, options)
+          : await dialog.showOpenDialog(options)
+        if (picked.canceled || !picked.filePaths[0]) {
+          return { canceled: true }
+        }
+        lifetime.signal.throwIfAborted()
+        const destinationPath = join(
+          picked.filePaths[0],
+          sanitizeLocalDownloadFilename(getRuntimePathBasename(dirPath))
+        )
+        try {
+          await stat(destinationPath)
+          throw new Error('Destination folder already exists')
+        } catch (error) {
+          if (!isENOENT(error)) {
+            throw error
+          }
+        }
+        tempPath = createSiblingTransferPath(destinationPath, 'download')
+        await provider.downloadFolder(dirPath, tempPath, { signal: lifetime.signal })
+        lifetime.signal.throwIfAborted()
+        await promoteLocalDownloadedFolder(tempPath, destinationPath, lifetime.signal)
+        tempPath = null
+        return { canceled: false, destinationPath }
+      } finally {
+        lifetime.dispose()
+        if (tempPath) {
+          await rm(tempPath, { recursive: true, force: true })
+        }
+      }
     }
   )
 

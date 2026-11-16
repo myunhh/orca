@@ -2,15 +2,22 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
 import { resolveSourceControlAiLinkedIssue } from './source-control-ai-linked-issue'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 
 const LOCAL_PATH = path.resolve('/workspace/repo-feature')
 const LOCAL_ID = `repo-1::${LOCAL_PATH}`
 const REMOTE_PATH = '/home/tester/wt'
 const REMOTE_ID = `repo-1::${REMOTE_PATH}`
 
-function makeStore(meta: Record<string, { linkedIssue?: number | null }>): Store {
+function makeStore(
+  meta: Record<string, { linkedIssue?: number | null }>,
+  hostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
+): Store {
   return {
-    getWorktreeMeta: vi.fn((worktreeId: string) => meta[worktreeId])
+    getWorktreeMeta: vi.fn((worktreeId: string) => meta[worktreeId]),
+    getWorktreeMetaForHost: vi.fn((worktreeId: string, requestedHostId: ExecutionHostId) =>
+      requestedHostId === hostId ? meta[worktreeId] : undefined
+    )
   } as unknown as Store
 }
 
@@ -25,7 +32,7 @@ describe('resolveSourceControlAiLinkedIssue', () => {
         worktreePath: LOCAL_PATH
       })
     ).toBe(9)
-    expect(store.getWorktreeMeta).toHaveBeenCalledWith(instanceId)
+    expect(store.getWorktreeMetaForHost).toHaveBeenCalledWith(instanceId, LOCAL_EXECUTION_HOST_ID)
   })
 
   // Independent callers can mismatch ID/path; renderer-derived stale pairs still agree and are not rejected here.
@@ -38,7 +45,7 @@ describe('resolveSourceControlAiLinkedIssue', () => {
         worktreePath: path.resolve('/workspace/repo-other')
       })
     ).toBeNull()
-    expect(store.getWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getWorktreeMetaForHost).not.toHaveBeenCalled()
   })
 
   it('accepts the resolved worktree path as an alternate local candidate', () => {
@@ -63,7 +70,7 @@ describe('resolveSourceControlAiLinkedIssue', () => {
         repoId: 'repo-2'
       })
     ).toBeNull()
-    expect(store.getWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getWorktreeMetaForHost).not.toHaveBeenCalled()
   })
 
   it('fails closed on an empty-string repoId instead of skipping the cross-check', () => {
@@ -76,11 +83,11 @@ describe('resolveSourceControlAiLinkedIssue', () => {
         repoId: ''
       })
     ).toBeNull()
-    expect(store.getWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getWorktreeMetaForHost).not.toHaveBeenCalled()
   })
 
   it('compares SSH remote paths as raw strings', () => {
-    const store = makeStore({ [REMOTE_ID]: { linkedIssue: 77 } })
+    const store = makeStore({ [REMOTE_ID]: { linkedIssue: 77 } }, 'ssh:conn-1')
 
     expect(
       resolveSourceControlAiLinkedIssue(store, {
@@ -89,5 +96,16 @@ describe('resolveSourceControlAiLinkedIssue', () => {
         connectionId: 'conn-1'
       })
     ).toBe(77)
+  })
+  it('does not read a same-id local issue for an SSH worktree', () => {
+    const store = makeStore({ [REMOTE_ID]: { linkedIssue: 77 } })
+    expect(
+      resolveSourceControlAiLinkedIssue(store, {
+        worktreeId: REMOTE_ID,
+        worktreePath: REMOTE_PATH,
+        connectionId: 'conn-1'
+      })
+    ).toBeNull()
+    expect(store.getWorktreeMeta).not.toHaveBeenCalled()
   })
 })

@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
-import { readLocalFileRange } from './local-file-range-read'
+import { fileRangePage, readLocalFileRange } from './local-file-range-read'
 import { validateFileRangeRequest } from '../../../shared/file-content/file-range-read'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
+import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { resolveLocalFileRequestPath } from './access/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -22,8 +22,17 @@ export function registerFilesystemChunkReadHandler({ store }: FilesystemHandlerC
       }
     ) => {
       validateFileRangeRequest(args.offset, args.length)
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        const provider = requireSshFilesystemProvider(args.connectionId)
+        if (!provider.readFileRange) {
+          throw new Error('File range reads require a newer SSH relay')
+        }
+        const info = await provider.stat(args.filePath)
+        if (info.type !== 'file') {
+          throw new Error('not_a_file')
+        }
+        const range = await provider.readFileRange(args.filePath, args.offset, args.length)
+        return fileRangePage(range.bytes.subarray(0, range.bytesRead), args.offset, info.size)
       }
       return guardWslUncPathAccess(
         args.filePath,

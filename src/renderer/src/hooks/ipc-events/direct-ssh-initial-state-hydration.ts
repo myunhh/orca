@@ -1,5 +1,6 @@
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { useAppStore } from '../../store'
+import { admitSshConnectionState } from '../../../../shared/ssh-retained-payload-admission'
 
 // Bound parallel probes so one 30s SSH timeout cannot serialize the target list or flood IPC with an unbounded burst.
 const HYDRATION_FANOUT = 4
@@ -38,13 +39,16 @@ export async function hydrateDirectSshInitialState(
         nextIndex += 1
         const hydrationWatermark = watermarkByTargetId.get(target.id) ?? 0
         try {
-          const state = await window.api.ssh.getState({ targetId: target.id })
+          const state = admitSshConnectionState(
+            await window.api.ssh.getState({ targetId: target.id }),
+            target.id
+          )
           if (
             !isStopped() &&
             state &&
             (watermarkByTargetId.get(target.id) ?? 0) === hydrationWatermark
           ) {
-            applySshConnectionStateChange(target.id, state as SshConnectionState)
+            applySshConnectionStateChange(target.id, state)
           }
         } catch (error) {
           // Thrown lookups prove no status; keep that target unverifiable and continue queued targets.

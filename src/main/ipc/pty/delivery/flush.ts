@@ -11,7 +11,7 @@ import {
   PTY_BATCH_FLUSH_MAX_WRITES,
   PTY_DISPATCHER_READY_WATCHDOG_MS
 } from './constants'
-import { makeDroppedOutputPayload } from './pending'
+import { compactPendingProjectionState, makeDroppedOutputPayload } from './pending'
 import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import { makePtyDataPayload, sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
@@ -106,6 +106,12 @@ export function flushPendingData(session: PtyIpcSession): void {
       const { id, pending } = selection
       // The model already owns hidden bytes; discard delivery and restore from its snapshot on reveal.
       if (shouldDropHiddenRendererPtyData(id, settings)) {
+        if (pending.projectionAdmissionIds) {
+          session.sshOutputIntake?.transferProjections(
+            pending.projectionAdmissionIds,
+            'hidden-drop'
+          )
+        }
         session.pendingData.remove(selection)
         session.pendingOverflowMarkedPtys.delete(id)
         session.updateProducerFlowControl(id)
@@ -145,8 +151,9 @@ export function flushPendingData(session: PtyIpcSession): void {
         : resolveSynchronizedOutputSafeSplit(data, PTY_BATCH_FLUSH_CHUNK_CHARS)
       const chunk = indivisible ? data : data.slice(0, splitAt)
       const remaining = indivisible ? '' : data.slice(splitAt)
+      let nextPending: PendingPtyData | undefined
       if (remaining) {
-        const nextPending: PendingPtyData = { data: remaining }
+        nextPending = { data: remaining }
         if (typeof pending.startSeq === 'number') {
           nextPending.startSeq = pending.startSeq + chunk.length
         }
@@ -177,8 +184,12 @@ export function flushPendingData(session: PtyIpcSession): void {
           pending.rawLength,
           pending.transformed,
           pending.startEscapeBoundary
-        )
+        ),
+        pending.projectionAdmissionIds
       )
+      if (nextPending) {
+        Object.assign(nextPending, compactPendingProjectionState(session, pending))
+      }
       if (!sent) {
         sendFailed = true
         break

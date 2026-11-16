@@ -1,5 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type {
+  WorkbenchBrowserViewport,
+  WorkbenchBrowserFrame,
   WorkbenchCommand,
   WorkbenchEditorContent,
   WorkbenchNotice,
@@ -24,6 +26,21 @@ export const workbenchWindowsApi = {
   publishNotice: (windowId: string, notice: WorkbenchNotice) =>
     ipcRenderer.invoke('workbench:publishNotice', { windowId, notice }),
   closeAll: () => ipcRenderer.invoke('workbench:closeAll'),
+  setBrowserViewport: (pageId: string, viewport: WorkbenchBrowserViewport | null) =>
+    ipcRenderer.invoke('workbench:setBrowserViewport', { pageId, viewport }),
+  streamLocalBrowser: (
+    windowId: string,
+    pageId: string,
+    viewport: WorkbenchBrowserViewport | null,
+    restart?: boolean
+  ) => ipcRenderer.invoke('workbench:streamLocalBrowser', { windowId, pageId, viewport, restart }),
+  publishBrowserFrame: (windowId: string, frame: WorkbenchBrowserFrame) =>
+    ipcRenderer.invoke('workbench:publishBrowserFrame', { windowId, frame }),
+  onBrowserFrame: (callback: (frame: WorkbenchBrowserFrame) => void) =>
+    subscribe('workbench:browserFrame', callback),
+  onBrowserViewportChanged: (
+    callback: Parameters<WorkbenchWindowsApi['onBrowserViewportChanged']>[0]
+  ) => subscribe('workbench:browserViewportChanged', callback),
   onSnapshotRequested: (callback: (windowId: string) => void) =>
     subscribe<{ windowId: string }>('workbench:snapshotRequested', (payload) =>
       callback(payload.windowId)

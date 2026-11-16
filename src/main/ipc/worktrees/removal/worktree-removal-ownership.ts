@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { getLocalPtyProvider } from '../../pty/provider/registry'
+import { getLocalPtyProvider, getSshPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -22,15 +22,16 @@ export async function stopPtysForDestructiveWorktreeRemoval(
   options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
 ): Promise<void> {
   const { connectionId, allowUnverifiedStop } = options
-  // This process has no SSH PTY provider and cannot prove remote terminals stopped.
-  if (connectionId) {
+  const provider = connectionId ? getSshPtyProvider(connectionId) : getLocalPtyProvider()
+  if (!provider) {
     throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
   }
   const teardownResult = await killAllProcessesForWorktree(worktreeId, {
     runtime,
     // Path-derived IDs repeat across hosts; exact ownership prevents ambiguous selectors or cross-host sweeps.
     resolvedWorktreeId: worktreeId,
-    localProvider: getLocalPtyProvider(),
+    ...(connectionId ? { resolvedConnectionId: connectionId, includeLocalRegistry: false } : {}),
+    localProvider: provider,
     onPtyStopped: clearProviderPtyState,
     requirePhysicalStop: true,
     // Only explicit Force Delete may waive PTY-stop proof; ordinary force confirmation must remain strict.

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store'
+import type { AppState } from '@/store/types'
 import {
   isBrowserPageMobileDriven,
   onBrowserDriverChange,
@@ -47,16 +48,40 @@ export function useWorktreeBrowserPageIds(worktreeId: string): readonly string[]
   )
 }
 
+function isDetachedBrowserPage(state: AppState, browserPageIds: readonly string[]): boolean {
+  if (browserPageIds.length === 0) {
+    return false
+  }
+  for (const tabId in state.detachedWindowIdByTabId) {
+    for (const worktreeId in state.unifiedTabsByWorktree) {
+      const tab = state.unifiedTabsByWorktree[worktreeId].find((tab) => tab.id === tabId)
+      if (
+        tab?.contentType === 'browser' &&
+        state.browserPagesByWorkspace[tab.entityId]?.some((page) =>
+          browserPageIds.includes(page.id)
+        )
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 export function useBrowserGuestPaintRetention(browserPageIds: readonly string[]): boolean {
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const hasRemotelyViewedBrowser = useBrowserRemoteViewerForAny(browserPageIds)
-  return hasAutomationVisibleBrowser || hasMobileDrivenBrowser || hasRemotelyViewedBrowser
+  const detached = useAppStore((state) => isDetachedBrowserPage(state, browserPageIds))
+  return (
+    detached || hasAutomationVisibleBrowser || hasMobileDrivenBrowser || hasRemotelyViewedBrowser
+  )
 }
 
 // Centralize all paint-retention terms so new signals cannot silently miss a container gate.
 export function browserPageNeedsPaintRetention(browserPageId: string): boolean {
   return (
+    isDetachedBrowserPage(useAppStore.getState(), [browserPageId]) ||
     isBrowserAutomationVisible(browserPageId) ||
     isBrowserPageMobileDriven(browserPageId) ||
     isBrowserPageRemotelyViewed(browserPageId)
@@ -68,7 +93,15 @@ export function onBrowserGuestPaintRetentionChange(listener: () => void): () => 
   const removeListeners = [
     onBrowserAutomationVisibilityChange(listener),
     onBrowserDriverChange(listener),
-    onBrowserRemoteViewerChange(listener)
+    onBrowserRemoteViewerChange(listener),
+    useAppStore.subscribe((state, previous) => {
+      if (
+        state.detachedWindowIdByTabId !== previous.detachedWindowIdByTabId ||
+        state.browserPagesByWorkspace !== previous.browserPagesByWorkspace
+      ) {
+        listener()
+      }
+    })
   ]
   return () => {
     for (const removeListener of removeListeners) {

@@ -7,10 +7,11 @@ import {
 } from '../../shared/review-head-tracking-ref'
 import { getReviewHeadRemoteComponent } from '../git/remotes/review-head-remote-identity'
 import {
-  SSH_GIT_RECONNECT_MESSAGE,
-  SshHostNotServedError
-} from '../providers/ssh-host-not-served-error'
-import { getRepoRoutingConnectionId } from '../../shared/execution-host'
+  ExecutionHostNotDispatchableError,
+  resolveGitRouteForHost
+} from '../providers/execution-host-provider-dispatch'
+import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 
 type LocalGitExecOptions = {
@@ -24,9 +25,18 @@ export async function fetchPrHeadTrackingRef(
   branch: string,
   options: { localGitExecOptions?: LocalGitExecOptions } = {}
 ): Promise<void> {
-  const sshTargetId = getRepoRoutingConnectionId(repo)
-  if (sshTargetId) {
-    throw new SshHostNotServedError(sshTargetId, SSH_GIT_RECONNECT_MESSAGE)
+  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+  if (route.kind === 'runtime') {
+    throw new ExecutionHostNotDispatchableError(route.hostId)
+  }
+  if (route.kind === 'ssh') {
+    await requireSshGitProvider(route.connectionId).fetchRemoteTrackingRef(
+      repo.path,
+      remote,
+      branch,
+      `refs/remotes/${remote}/${branch}`
+    )
+    return
   }
   await gitExecFileAsync(
     ['fetch', remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`],
@@ -49,9 +59,16 @@ export async function fetchGitHubPullRequestHeadRef(
   if (!isSafeReviewHeadFetchRemote(remote)) {
     throw new Error('Pull request fetch remote must not start with "-".')
   }
-  const sshTargetId = getRepoRoutingConnectionId(repo)
-  if (sshTargetId) {
-    throw new SshHostNotServedError(sshTargetId, SSH_GIT_RECONNECT_MESSAGE)
+  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+  if (route.kind === 'runtime') {
+    throw new ExecutionHostNotDispatchableError(route.hostId)
+  }
+  if (route.kind === 'ssh') {
+    return requireSshGitProvider(route.connectionId).fetchGitHubPullRequestHead(
+      repo.path,
+      remote,
+      prNumber
+    )
   }
   const localGitExecOptions = options.localGitExecOptions ?? { cwd: repo.path }
   const remoteComponent = await getReviewHeadRemoteComponent(remote, localGitExecOptions)

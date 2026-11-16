@@ -5,7 +5,7 @@ import type {
 } from '../../shared/automations/external/external-automation'
 import { assertExternalAutomationJobId } from './external-manager-job-id'
 import { runLocalAutomationCommand } from './external-manager-local-command'
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import { getActiveMultiplexer } from '../ssh/targets/ssh-target-registry'
 
 const PROVIDER_ACTION_COMMANDS: Record<
   ExternalAutomationProvider,
@@ -38,5 +38,13 @@ export async function runExternalAutomationAction(
     await runLocalAutomationCommand(input.provider, ['cron', command, input.jobId])
     return
   }
-  throw new SshHostNotServedError(input.target.connectionId)
+  const mux = getActiveMultiplexer(input.target.connectionId)
+  if (!mux || mux.isDisposed()) {
+    throw new Error(`SSH target "${input.target.connectionId}" is not connected.`)
+  }
+  await mux.request('externalAutomations.act', {
+    provider: input.provider,
+    action: input.action,
+    jobId: input.jobId
+  })
 }

@@ -49,6 +49,7 @@ import {
   liftSshHostUserDisconnect,
   resumeRuntimeEnvironmentStatus
 } from './ssh-host-user-disconnect'
+import { connectRelayTarget, shouldConnectDirectSshRelay } from './ssh-relay-connect'
 
 /**
  * `automatic`: no user asked for this connect, so a cancelled sign-in or a Disconnect stays.
@@ -184,6 +185,10 @@ async function doConnect(
   // Read after the lifecycle wait: a Stop or Forget this connect queued behind wrote the hold.
   if (automatic && isManagedServerRemovalHeld(target)) {
     throw createSshUserDisconnectedError(target.label)
+  }
+  // An admitted quiet retry already owns a bridged managed move, possibly before its durable claim.
+  if (!quiet && shouldConnectDirectSshRelay(target)) {
+    return connectRelayTarget(target, replacePendingTransport)
   }
 
   // A quiet retry rotates only once its move succeeds; a refusal must not cancel provider requests.

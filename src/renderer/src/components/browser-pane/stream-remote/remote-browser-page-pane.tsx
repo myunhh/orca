@@ -44,9 +44,10 @@ import { RemoteBrowserPageViewport } from './remote-browser-page-viewport'
 export function RemoteBrowserPagePane({
   browserTab,
   workspaceId,
-  runtimeEnvironmentId,
+  runtimeEnvironmentId: activeRuntimeEnvironmentId,
   worktreeId,
   isActive,
+  isRendering = isActive,
   chromeShortcutScope,
   onUpdatePageState,
   onSetUrl
@@ -56,11 +57,11 @@ export function RemoteBrowserPagePane({
   runtimeEnvironmentId: string
   worktreeId: string
   isActive: boolean
+  isRendering?: boolean
   chromeShortcutScope: BrowserChromeShortcutScope
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: BrowserPageUrlSetter
 }): React.JSX.Element {
-  const activeRuntimeEnvironmentId = runtimeEnvironmentId
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const remoteViewportRef = useRef<HTMLDivElement | null>(null)
@@ -155,7 +156,7 @@ export function RemoteBrowserPagePane({
     browserTab,
     worktreeId,
     activeRuntimeEnvironmentId,
-    isActive,
+    isActive: isRendering,
     setPaneNotice,
     setPaneBusy,
     clearPendingRemoteWheel,
@@ -163,11 +164,9 @@ export function RemoteBrowserPagePane({
   })
 
   // Stopped streams cannot clear paneBusy with frames; staged pages remain busy until creation. Stream notices outrank consequent RPC failures.
-  const busy = stagedPage
-    ? true
-    : streamStatus.kind === 'stopped'
-      ? false
-      : paneBusy || isRemoteBrowserStreamBusy(streamStatus)
+  const busy =
+    stagedPage ||
+    (streamStatus.kind !== 'stopped' && (paneBusy || isRemoteBrowserStreamBusy(streamStatus)))
   const streamNotice = remoteBrowserStreamNotice(streamStatus)
   const remoteError =
     paneNotice?.kind === 'direct' ? paneNotice.text : (streamNotice ?? paneNotice?.text ?? null)
@@ -226,7 +225,7 @@ export function RemoteBrowserPagePane({
   const { reconnectRemoteStream } = useRemoteBrowserPageStream({
     activeRuntimeEnvironmentId,
     browserPageId: browserTab.id,
-    isActive,
+    isActive: isRendering,
     lifecycle,
     stagedPage,
     runtimeWorktree,
@@ -332,7 +331,6 @@ export function RemoteBrowserPagePane({
   })
 
   return (
-    // Scope E2E controls per pane; a workspace may have several address bars.
     <div
       data-testid="remote-browser-pane"
       className="relative flex h-full min-h-0 flex-1 flex-col bg-background"
@@ -356,7 +354,7 @@ export function RemoteBrowserPagePane({
               focusOnCreate: false,
               selectWorktree: false,
               intent: { kind: 'url' },
-              expectedRuntimeEnvironmentId: runtimeEnvironmentId,
+              expectedRuntimeEnvironmentId: activeRuntimeEnvironmentId,
               placementPreference: 'server'
             }).catch((error) => {
               setPaneNotice({
@@ -372,7 +370,7 @@ export function RemoteBrowserPagePane({
         />
       ) : null}
       <RemoteBrowserPageToolbar
-        runtimeEnvironmentId={runtimeEnvironmentId}
+        runtimeEnvironmentId={activeRuntimeEnvironmentId}
         addressBarValue={addressBarValue}
         onAddressBarChange={setAddressBarValue}
         onSubmitAddressBar={submitAddressBar}

@@ -64,6 +64,7 @@ export const worktreesApi = {
   updateMeta: (args) => ipcRenderer.invoke('worktrees:updateMeta', args),
 
   listLineage: () => ipcRenderer.invoke('worktrees:listLineage'),
+  listLineageForHost: (args) => ipcRenderer.invoke('worktrees:listLineageForHost', args),
 
   updateLineage: (args) => ipcRenderer.invoke('worktrees:updateLineage', args),
 

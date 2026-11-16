@@ -16,6 +16,7 @@ const MAX_HELD_LISTING_ENTRIES = 1_000_000
 
 type DirPageRequest = {
   worktree: string
+  executionHostId?: string
   relativePath: string
   followSymlinks?: boolean
   after?: DirEntryCursor
@@ -66,6 +67,7 @@ export class DirListingPageCache {
         : JSON.stringify([
             connectionId,
             request.worktree,
+            request.executionHostId,
             request.relativePath,
             request.followSymlinks === true
           ])

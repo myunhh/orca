@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
@@ -31,6 +32,21 @@ export async function initializeMultiplexStream(
     request.capabilities?.outputCadence === 1 &&
     // Field rollback without a release: clients then see a host without the capability.
     process.env.ORCA_DISABLE_TERMINAL_OUTPUT_CADENCE !== '1'
+  const streamGeneration = randomUUID()
+  const sourceRangeLedger =
+    request.capabilities?.ackOutput === 1 && request.capabilities.ackOutputSourceRanges === 1
+      ? state.sourceRangeRegistry.open(streamGeneration)
+      : null
+  const sourceRangeConsumerAttached =
+    sourceRangeLedger !== null &&
+    runtime.attachRemoteTerminalSourceRangeConsumer({
+      ptyId,
+      consumerId: remoteDesktopSubscriptionKey,
+      streamGeneration
+    })
+  if (!sourceRangeConsumerAttached) {
+    sourceRangeLedger?.close()
+  }
   const stream: TerminalMultiplexStream = {
     streamId: request.streamId,
     terminal: request.terminal,
@@ -38,6 +54,11 @@ export async function initializeMultiplexStream(
     client: request.client,
     isMobile,
     ackOutput: request.capabilities?.ackOutput === 1,
+    ackOutputSourceRanges: sourceRangeConsumerAttached,
+    streamGeneration,
+    sourceRangeLedger: sourceRangeConsumerAttached ? sourceRangeLedger : null,
+    sourceRangeConsumerAttached,
+    sourceRangeReplacement: null,
     ackInFlightBytes: 0,
     ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
     supportsOutputPause: request.capabilities?.outputPause === 1,

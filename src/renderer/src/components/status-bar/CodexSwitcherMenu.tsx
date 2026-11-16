@@ -8,7 +8,7 @@ import {
   InlineUsageBars,
   InlineUsageSignInAction,
   InlineUsageSkeleton,
-  isUnavailableInactiveUsage
+  isSignedOutInactiveUsage
 } from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { AccountSwitchSection } from './AccountSwitchList'
@@ -67,7 +67,7 @@ export function CodexSwitcherMenu({
       !hasActiveRuntimeEnvironment &&
       !target.active &&
       target.id !== null &&
-      isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
+      isSignedOutInactiveUsage(inactiveUsage?.rateLimits)
     return { target, inactiveUsage, showSignInAction }
   })
   const unavailableUsageRows = rows.filter((row) => row.showSignInAction)

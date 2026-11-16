@@ -1,17 +1,18 @@
 import { ipcMain } from 'electron'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import {
   getLocalProjectGhExecOptions,
   getLocalProjectGitExecOptions,
   getWorktreeCreatePrefetchGitOptions
 } from '../../../workspaces/execution-host/project-runtime-git-options'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 import {
-  SSH_GIT_RECONNECT_MESSAGE,
-  SshHostNotServedError
-} from '../../../providers/ssh-host-not-served-error'
+  resolveGitRouteForHost,
+  ExecutionHostNotDispatchableError
+} from '../../../providers/execution-host-provider-dispatch'
 import {
   fetchPrHeadTrackingRef,
   fetchGitHubPullRequestHeadRef
@@ -47,12 +48,16 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
         return reviewStartPointFailure('folderUnsupported')
       }
       // SSH ownership may exist only in executionHostId.
-      const connectionId = getRepoRoutingConnectionId(repo)
+      const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+      if (route.kind === 'runtime') {
+        throw new ExecutionHostNotDispatchableError(route.hostId)
+      }
+      const connectionId = route.kind === 'ssh' ? route.connectionId : null
       const gitExec = async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
         if (!connectionId) {
           return gitExecFileAsync(args, getLocalProjectGitExecOptions(store, repo))
         }
-        throw new SshHostNotServedError(connectionId, SSH_GIT_RECONNECT_MESSAGE)
+        return requireSshGitProvider(connectionId).exec(args, repo.path)
       }
       const localGhOptions = connectionId
         ? repo.ghAccount
@@ -60,13 +65,27 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
           : undefined
         : getLocalProjectGhExecOptions(store, repo)
       const fetchRemoteTrackingRef = (remote: string, branch: string): Promise<void> =>
-        fetchPrHeadTrackingRef(repo, remote, branch, {
-          localGitExecOptions: getLocalProjectGitExecOptions(store, repo)
-        })
+        fetchPrHeadTrackingRef(
+          repo,
+          remote,
+          branch,
+          connectionId
+            ? {}
+            : {
+                localGitExecOptions: getLocalProjectGitExecOptions(store, repo)
+              }
+        )
       const fetchPullRequestHeadRef = (remote: string, prNumber: number): Promise<string> =>
-        fetchGitHubPullRequestHeadRef(repo, remote, prNumber, {
-          localGitExecOptions: getLocalProjectGitExecOptions(store, repo)
-        })
+        fetchGitHubPullRequestHeadRef(
+          repo,
+          remote,
+          prNumber,
+          connectionId
+            ? {}
+            : {
+                localGitExecOptions: getLocalProjectGitExecOptions(store, repo)
+              }
+        )
 
       // Source Control's push-target ensure asks unprompted; it must not start a stopped distro (E9).
       const { wslDistro } = connectionId ? {} : getWorktreeCreatePrefetchGitOptions(store, repo)

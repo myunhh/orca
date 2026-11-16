@@ -13,6 +13,8 @@ import {
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 
 export let localProvider: IPtyProvider = new LocalPtyProvider()
+export const sshProviders = new Map<string, IPtyProvider>()
+export const sshProvidersByGeneration = new Map<number, IPtyProvider>()
 let colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
 
 // Push theme updates to every PTY owner before its next OSC query; never erase a surviving daemon's theme with unknown.
@@ -47,7 +49,13 @@ export type RegisteredPtyProvider = {
 }
 
 export function registeredPtyProviders(): RegisteredPtyProvider[] {
-  return [{ provider: localProvider, hostId: LOCAL_EXECUTION_HOST_ID }]
+  return [
+    { provider: localProvider, hostId: LOCAL_EXECUTION_HOST_ID },
+    ...Array.from(sshProviders, ([targetId, provider]) => ({
+      provider,
+      hostId: toSshExecutionHostId(targetId)
+    }))
+  ]
 }
 
 function ptyHostNotDispatchableMessage(hostId: ResolvedPtyHost): string {
@@ -62,7 +70,7 @@ function ptyHostNotDispatchableMessage(hostId: ResolvedPtyHost): string {
   )
 }
 
-/** Only this machine's PTYs are driven here; a paired runtime drives its own over runtime RPC. */
+/** Missing host providers must never redirect work to this machine. */
 export class PtyHostNotDispatchableError extends Error {
   constructor(readonly hostId: ResolvedPtyHost) {
     super(ptyHostNotDispatchableMessage(hostId))
@@ -73,6 +81,11 @@ export class PtyHostNotDispatchableError extends Error {
 export function getProvider(hostId: ExecutionHostId): IPtyProvider {
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
     return localProvider
+  }
+  const targetId = getSshTargetIdForExecutionHost(hostId)
+  const provider = targetId === null ? undefined : sshProviders.get(targetId)
+  if (provider) {
+    return provider
   }
   throw new PtyHostNotDispatchableError(hostId)
 }
@@ -118,7 +131,12 @@ export function getProviderForPty(ptyId: string): IPtyProvider {
 
 export function hasPtyProviderForInspection(ptyId: string): boolean {
   // Why: process inspection is background polling; other hosts read as idle, not repeated IPC errors.
-  return resolvePtyExecutionHost(ptyId) === LOCAL_EXECUTION_HOST_ID
+  const hostId = resolvePtyExecutionHost(ptyId)
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    return true
+  }
+  const targetId = hostId === 'foreign' ? null : getSshTargetIdForExecutionHost(hostId)
+  return targetId !== null && sshProviders.has(targetId)
 }
 
 export function getAppPtyId(connectionId: string | null | undefined, ptyId: string): string {
@@ -135,6 +153,28 @@ export function tryGetProviderForPty(ptyId: string): IPtyProvider | undefined {
   } catch {
     return undefined
   }
+}
+
+export function registerSshPtyProvider(connectionId: string, provider: IPtyProvider): void {
+  sshProviders.set(connectionId, provider)
+  pushColorQueryReplyColors(provider)
+  const generation = provider.providerGeneration
+  if (generation !== undefined && Number.isSafeInteger(generation) && generation > 0) {
+    sshProvidersByGeneration.set(generation, provider)
+  }
+}
+
+export function unregisterSshPtyProvider(connectionId: string): void {
+  const provider = sshProviders.get(connectionId)
+  const generation = provider?.providerGeneration
+  if (generation !== undefined && sshProvidersByGeneration.get(generation) === provider) {
+    sshProvidersByGeneration.delete(generation)
+  }
+  sshProviders.delete(connectionId)
+}
+
+export function getSshPtyProvider(connectionId: string): IPtyProvider | undefined {
+  return sshProviders.get(connectionId)
 }
 
 export function closeStartupQueryAuthorityForPty(ptyId: string): void {

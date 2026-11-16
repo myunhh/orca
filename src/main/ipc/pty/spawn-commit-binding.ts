@@ -1,3 +1,4 @@
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 import type { Store } from '../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../shared/workspace-session/terminal-session-state-save-failure'
@@ -33,7 +34,10 @@ export async function savePtySpawnPaneBinding(
   const replaced = state.replacedPaneOwner
   try {
     const persisted = replaced
-      ? await store.persistPtyBinding(swapReplacedPaneBinding(store, binding, replaced))
+      ? await store.persistPtyBinding(
+          swapReplacedPaneBinding(store, binding, replaced),
+          connectionId ? toSshExecutionHostId(connectionId) : undefined
+        )
       : await persistFreshPaneBinding(store, binding, connectionId, absentOwner)
     if (persisted === false) {
       throw new Error(refusal)
@@ -44,7 +48,7 @@ export async function savePtySpawnPaneBinding(
     }
   } catch (err) {
     console.error(failureLog, err)
-    await discardUnpersistedPtySpawn(state.provider, state.result, state.deps.runtime)
+    await discardUnpersistedPtySpawn(state.provider, state.result, state.deps.runtime, store)
     if (
       err instanceof PaneOwnerContentionError ||
       (err instanceof Error && err.message === refusal)

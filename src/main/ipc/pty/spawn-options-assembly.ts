@@ -128,14 +128,16 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-  const shell = resolveStartupShell(
-    input.codexRuntime === 'wsl' ? 'linux' : process.platform,
-    resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
-      terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
-    })
-  )
+  const shell = connectionId
+    ? undefined
+    : resolveStartupShell(
+        input.codexRuntime === 'wsl' ? 'linux' : process.platform,
+        resolveLocalWindowsAgentStartupShell({
+          platform: process.platform,
+          isRemote: input.codexRuntime === 'wsl',
+          terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
+        })
+      )
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: input.launchCommand,
     agent: launchAgent,
@@ -152,7 +154,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const env = openCodeLaunch.env
   const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
-    pluginDir && openCodeLaunch.command
+    pluginDir && openCodeLaunch.command && shell
       ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
       : openCodeLaunch.command
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
@@ -231,6 +233,9 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   }
   if (input.sessionId !== undefined) {
     spawnOptions.sessionId = input.sessionId
+  }
+  if (connectionId && input.shellOverride !== undefined) {
+    spawnOptions.shellOverride = input.shellOverride
   }
   if (!connectionId) {
     // Daemon spawns must honor saved Windows shell preference too.

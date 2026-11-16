@@ -1,4 +1,6 @@
 import type {
+  WorkbenchBrowserViewport,
+  WorkbenchBrowserFrame,
   WorkbenchCommand,
   WorkbenchEditorContent,
   WorkbenchNotice,
@@ -16,6 +18,25 @@ export type WorkbenchWindowsApi = {
   publishEditorContent: (windowId: string, content: WorkbenchEditorContent) => Promise<void>
   publishNotice: (windowId: string, notice: WorkbenchNotice) => Promise<void>
   closeAll: () => Promise<void>
+  setBrowserViewport: (
+    pageId: string,
+    viewport: WorkbenchBrowserViewport | null
+  ) => Promise<boolean>
+  streamLocalBrowser: (
+    windowId: string,
+    pageId: string,
+    viewport: WorkbenchBrowserViewport | null,
+    restart?: boolean
+  ) => Promise<void>
+  publishBrowserFrame: (windowId: string, frame: WorkbenchBrowserFrame) => Promise<void>
+  onBrowserFrame: (callback: (frame: WorkbenchBrowserFrame) => void) => () => void
+  onBrowserViewportChanged: (
+    callback: (payload: {
+      windowId: string
+      pageId: string
+      viewport: WorkbenchBrowserViewport | null
+    }) => void
+  ) => () => void
   onSnapshotRequested: (callback: (windowId: string) => void) => () => void
   onCommand: (callback: (relayed: WorkbenchRelayedCommand) => void) => () => void
   onWindowClosed: (callback: (windowId: string) => void) => () => void

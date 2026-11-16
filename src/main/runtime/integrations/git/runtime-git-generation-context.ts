@@ -15,11 +15,21 @@ import {
   type RuntimeGitCommandHost,
   type RuntimeGitTarget
 } from './runtime-git-command-target'
+import { runtimeGitRouteForTarget } from './runtime-git-command-target'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 
 type PullRequestDraftGitExec = Parameters<typeof getPullRequestDraftContext>[0]
 
-/** Runs the PR draft-context probes on a local target. */
+/** Runs PR draft-context probes on the worktree's execution host. */
 export function pullRequestDraftGitExec(target: RuntimeGitTarget): PullRequestDraftGitExec {
+  const route = runtimeGitRouteForTarget(target)
+  if (route.kind === 'ssh') {
+    const provider = requireSshGitProvider(route.connectionId)
+    return (argv, options) =>
+      provider.exec(argv, target.worktree.path, {
+        timeoutMs: options?.timeoutMs ?? options?.timeout
+      })
+  }
   return (argv, options) =>
     gitExecFileAsync(argv, {
       cwd: target.worktree.path,

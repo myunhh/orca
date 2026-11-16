@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, posix } from 'node:path'
+import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { HostedReviewProvider } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 
 const PULL_REQUEST_TEMPLATE_CANDIDATES = [
@@ -41,12 +42,17 @@ export async function readHostedReviewTemplate(
   connectionId?: string | null,
   provider?: HostedReviewProvider | null
 ): Promise<string> {
-  if (connectionId) {
-    return ''
-  }
+  const remoteProvider = connectionId ? requireSshFilesystemProvider(connectionId) : null
   for (const relativeCandidate of getTemplateCandidates(provider)) {
     try {
-      return await readFile(join(repoPath, relativeCandidate), 'utf8')
+      if (remoteProvider) {
+        const result = await remoteProvider.readFile(posix.join(repoPath, relativeCandidate))
+        if (!result.isBinary) {
+          return result.content
+        }
+      } else {
+        return await readFile(join(repoPath, relativeCandidate), 'utf8')
+      }
     } catch {
       // Try the next conventional hosted-review template path.
     }

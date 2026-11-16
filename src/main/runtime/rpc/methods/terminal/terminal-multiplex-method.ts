@@ -15,6 +15,7 @@ import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
 import { createMultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
 import { TerminalMultiplexLinkEstimate } from './terminal-multiplex-link-estimate'
+import { TerminalSourceRangeRegistry } from '../../terminal-source-range-registry'
 
 export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
@@ -46,6 +47,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         closed: false,
         cursor: 0,
         streams: new Map<number, TerminalMultiplexStream>(),
+        sourceRangeRegistry: new TerminalSourceRangeRegistry(),
         pendingPtyWaitControllers: new Map<number, Set<AbortController>>(),
         ptyWaitAdmission: createMultiplexPtyWaitAdmission(
           TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,

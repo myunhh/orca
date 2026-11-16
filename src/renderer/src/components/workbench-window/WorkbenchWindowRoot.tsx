@@ -19,6 +19,7 @@ import type {
 import { WorkbenchTabStrip } from './WorkbenchTabStrip'
 import { WorkbenchTerminalBody } from './WorkbenchTerminalBody'
 import { WorkbenchEditorBody } from './WorkbenchEditorBody'
+import { WorkbenchBrowserBody } from './WorkbenchBrowserBody'
 import { WorkbenchPaneHeaderActions, type WorkbenchPaneSide } from './workbench-pane-header-actions'
 import { useWorkbenchWindowModel } from './use-workbench-window-model'
 
@@ -35,6 +36,9 @@ const WINDOW_ORDINAL = readWindowOrdinal()
 function WorkbenchTabBody({ tab }: { tab: WorkbenchTabView }): React.JSX.Element | null {
   if (tab.kind === 'terminal' && tab.terminal) {
     return <WorkbenchTerminalBody tabId={tab.tabId} terminal={tab.terminal} />
+  }
+  if (tab.kind === 'browser' && tab.browser) {
+    return <WorkbenchBrowserBody tabId={tab.tabId} browser={tab.browser} />
   }
   return <WorkbenchEditorBody tab={tab} />
 }
@@ -93,7 +97,12 @@ export function WorkbenchWindowRoot(): React.JSX.Element {
 
   // The main window runs this window's commands; their failures show here, where the user acted.
   useEffect(
-    () => window.api.workbenchWindows?.onNotice((notice) => toast.error(notice.message)),
+    () =>
+      window.api.workbenchWindows?.onNotice((notice) => {
+        if (!notice.browserPageId) {
+          toast.error(notice.message)
+        }
+      }),
     []
   )
 

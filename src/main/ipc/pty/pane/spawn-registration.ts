@@ -11,7 +11,8 @@ import {
   setAdoptedPtyOwnership,
   setPtyOwnership
 } from '../provider/ownership-state'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getPtySshConnectionId } from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { errorMessage } from '../../../../shared/error-message'
@@ -20,17 +21,23 @@ import { retirePersistedStablePaneOwner } from './stable-owner'
 /** Track before saving; failed save/stop must not make a potentially live process disappear from ownership. */
 export function admitPtySpawnOwnership(
   runtime: OrcaRuntimeService | undefined,
-  result: PtySpawnResult
+  result: PtySpawnResult,
+  connectionId?: string | null
 ): void {
+  const ownerConnectionId = connectionId ?? getPtySshConnectionId(result.id)
   if (result.isReattach || result.agentSessionEnsure?.disposition === 'adopted') {
     runtime?.assertPtyRegistrationAllowed?.(result.id, result.incarnationId)
     // A failed local save must not strand a live process already admitted by its host.
-    setAdoptedPtyOwnership(result.id)
+    if (ownerConnectionId) {
+      setPtyOwnership(result.id, getConnectionExecutionHostId(ownerConnectionId))
+    } else {
+      setAdoptedPtyOwnership(result.id)
+    }
   } else if (exitedBeforeAdmission(runtime, result)) {
     // Its exit listener already ran; tracking it now would resurrect it.
     return
   } else {
-    setPtyOwnership(result.id, LOCAL_EXECUTION_HOST_ID)
+    setPtyOwnership(result.id, getConnectionExecutionHostId(ownerConnectionId))
   }
   if (result.incarnationId) {
     ptyIncarnationById.set(result.id, result.incarnationId)
@@ -59,7 +66,8 @@ export async function discardUnpersistedPtySpawn(
   runtime:
     | (Pick<OrcaRuntimeService, 'markPtyLivenessUnverifiable'> &
         Partial<Pick<OrcaRuntimeService, 'intentionalPtyStops'>>)
-    | undefined
+    | undefined,
+  store?: Store
 ): Promise<void> {
   if (
     result.isReattach ||
@@ -104,7 +112,7 @@ export async function discardUnpersistedPtySpawn(
     }
     stopped = true
     // The proof names this incarnation, so a replacement that arrived meanwhile keeps its own.
-    finishPtyShutdown(result.id, null, undefined, proof)
+    finishPtyShutdown(result.id, getPtySshConnectionId(result.id), store, proof)
   } finally {
     settleStop?.(stopped)
   }

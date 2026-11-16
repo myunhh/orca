@@ -1,8 +1,8 @@
 # Orca Customizations
 
-This fork adds four features to Orca: detached workbench windows, an agent graph, cross-terminal context sharing, and a usage bar that shows every local account.
+This fork adds detached workbench windows, an agent graph, cross-terminal context sharing, local-account usage meters, multi-host file distribution, and a ChatGPT browser research workflow.
 
-All changes sit on top of upstream commit `aefcdd99` and live in the commit range `aefcdd99..76cda768`. To carry them onto another base, apply that range:
+The original four customizations sit on top of upstream commit `aefcdd99` in the commit range `aefcdd99..76cda768`. That range does not include subsequent fixes, SSH restoration, file distribution, or the research workflow. To export the original changes:
 
 ```bash
 git format-patch aefcdd99..76cda768 -o orca-customizations
@@ -34,36 +34,45 @@ Forks warm only GitHub-hosted caches. The shared runtime, package-fixture and xt
 
 See [the codebase dependency analysis](docs/codebase-dependency-analysis.md) for the graph artifacts, verified findings and remaining limitations.
 
-## SSH hosts: getting the server template
+## SSH hosts: relay and managed-server ownership
 
-To work on an SSH host, Orca installs its own server there from a server template bundled with the app. Release builds include it. Builds of this fork made with `pnpm dev` or a local packaging run do not, so connecting to an SSH host shows **"This host isn't supported by this version of Orca"**. Building the template needs node-pty compiled on Linux, macOS and Windows, so it is made on GitHub Actions and downloaded once:
+New manually added or imported SSH targets use the relay implementation restored from `dc08ffeba9603c5b48b9b100d0a7f89b021e6d1b` (2026-10-01), adapted to current authentication, host-key verification, workspace ownership, and terminal retirement rules. This changes Orca's remote execution path, not the system OpenSSH version.
+
+Build the bundled relay when running from source:
+
+```bash
+pnpm build:relay
+```
+
+Existing managed-server targets and runtime-owned ephemeral VM targets retain their managed runtime route. Orca does not reclaim their catalogs or move/delete their data as part of relay restoration. Missing server templates can still affect those managed connections; fetch their template with:
 
 ```bash
 node fork-maintenance/fetch-orcad-template.mjs --build
 ```
 
-This starts the template build on your fork's Actions (about 30-60 minutes), then puts the result in `out/orcad-template`. It needs the GitHub CLI signed in (`gh auth login`) and Actions enabled on the fork. Afterwards restart `pnpm dev` or rebuild the app, then reconnect the host; Orca retries hosts it gave up on while the template was missing.
-
-- Without `--build`, the script downloads the newest template your fork's Actions already built. Templates stay downloadable for 7 days.
-- Fetch the template again after syncing upstream, because the server code changes with it.
+That command builds the managed template through your fork's GitHub Actions, requires `gh auth login`, and downloads it into `out/orcad-template`. Without `--build`, it downloads the newest available artifact. Refresh the template after upstream changes, then restart the app before reconnecting.
 
 ## 1. Detached Workbench Windows
 
-Move terminals, Markdown files and images into separate windows, the way Chrome lets you drag a tab out into its own window.
+Move terminals, Markdown files, images, and embedded Browser tabs into separate desktop windows.
 
-- **Move to New Window**: right-click a terminal tab, a Markdown tab or an image tab and choose **Move to New Window**.
+- **Move to New Window**: right-click an eligible tab and choose **Move to New Window**.
 - **Move to Window ▸**: send a tab to a workbench window that is already open.
 - **Multiple tabs per window**: each workbench window has its own tab strip. You can switch tabs, close them, or open more.
   - **+** opens a new terminal in the workspace of the active tab.
-  - **Add Existing Tab…** pulls in a terminal, Markdown tab or image tab that is open in the main window.
+  - **Add Existing Tab…** pulls in an eligible tab that is open in the main window.
 - **Split View**: show two tabs side by side in the same window.
 - **Split terminals**: split a terminal into panes inside a workbench window, the same as in the main window. Hover a pane and use its **Split Terminal Right** / **Split Terminal Down** buttons, or press the main window's split shortcuts while the pane is focused.
 - **Return to Main Window**: send a tab back. Closing a workbench window returns all of its tabs to the main window, and their terminals keep running.
 - **Live terminals**: terminals in a workbench window are fully interactive. The main window still owns every process and every saved layout, so no terminal is ever killed when it moves between windows.
+- **Terminal sizing**: the detached window owns the visible terminal viewport. The main-window overlay no longer paints or resizes a detached tab.
+- **Markdown images**: relative images are read through the source tab's filesystem owner and relayed as bytes. **Reload** refreshes the document and its image cache.
+- **Browser sessions**: the original guest stays in the main window; the detached window streams its frames and forwards input. Moving or returning the tab does not create a new browser session.
 
 **Limitations**
 
 - Markdown and image tabs are read-only in a workbench window. Use **Reload** to pick up changes on disk.
+- Browser workspaces containing workspace-document pages cannot detach. Their grant-bound document guests stay separate from website automation; open Markdown or images as editor tabs to use the read-only detached view.
 - Agent tabs opened in the chat view cannot be detached. Agents running in a terminal can.
 - Workbench windows are not restored after a restart. Their tabs reopen in the main window.
 - Not available in paired web clients.
@@ -145,7 +154,7 @@ The status-bar usage meters always show the accounts signed in on this computer.
 **Limitations**
 
 - Extra-account meters cover Claude and Codex, the providers Orca can hold several accounts for.
-- An account appears once Orca has read its usage at least once.
+- Pending, unavailable, and expired accounts remain listed. Network failures do not mean the account signed out. Claude retries a rejected request only if its credential store contains a newer token; Orca does not compete with Claude's token-refresh locks. Revoked sessions still require signing in again.
 
 **Key files**
 
@@ -153,3 +162,53 @@ The status-bar usage meters always show the accounts signed in on this computer.
 - `src/renderer/src/components/status-bar/use-status-bar-extra-accounts.ts`
 - `src/renderer/src/components/status-bar/StatusBarSurface.tsx`
 - `src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx`, `use-codex-switcher-controller.ts`
+
+## 5. Local Code Distribution and Result Collection
+
+Keep one local source tree and explicitly deploy selected files to several saved runtime environments or connected direct SSH targets. This is a CLI workflow, not automatic bidirectional synchronization.
+
+Create a manifest beside the source tree:
+
+```json
+{
+  "source": ".",
+  "inputs": ["src", "config.yaml"],
+  "results": ["results"],
+  "targets": [
+    {
+      "name": "gpu-a",
+      "executionHostId": "ssh:TARGET_ID",
+      "worktree": "folder:WORKSPACE_ID",
+      "directory": "experiment"
+    },
+    {
+      "name": "gpu-b",
+      "environment": "SAVED_ENVIRONMENT",
+      "worktree": "id:REPO_ID::/absolute/worktree/path",
+      "directory": "experiment"
+    }
+  ]
+}
+```
+
+Each target names exactly one `executionHostId` or `environment`. Use actual saved IDs; connect direct SSH targets in Orca first. An `environment` target addresses that server's own filesystem, not an SSH host nested under it. `source` is relative to the manifest. Input, result, and destination paths are relative to their respective roots.
+
+```bash
+orca file deploy distribution.json
+orca file deploy distribution.json --apply
+orca file deploy distribution.json --apply --overwrite
+orca file collect distribution.json --output ./collected
+orca file collect distribution.json --output ./collected --apply
+```
+
+Without `--apply`, commands only preview. Deploy snapshots local inputs once for the batch; existing destination files are refused unless `--overwrite` is explicit. Collection requires a new output directory and separates results by target name. `--target gpu-a` selects one target. Run from the local machine, not an SSH-forwarded shell.
+
+Transfers preserve file bytes, not permissions or empty directories. Symbolic links are refused. Pause result writers before collecting: collection does not snapshot a running experiment. Files commit individually; a failed batch can leave completed files on some targets. Output reports partial progress and exits nonzero on failure. No remote files are deleted to mirror the local tree.
+
+## 6. ChatGPT Pro Research Through the Browser
+
+Use the bundled [research workflow](skill-guides/orca-cli/references/research.md) with an Orca browser agent. It selects relevant installed Skills, composes their instructions with the research prompt, and uses the visible ChatGPT interface to submit and retrieve the answer.
+
+Sign in to ChatGPT yourself in Orca Browser, including any verification challenge. Pro modes are available only when that account and the current ChatGPT interface offer them. Orca does not provide a subscription or bypass login.
+
+`orca research prepare` composes a prompt without submitting. `fill`, `submit`, and `read` are separate commands bound to a selected page and expected HTTPS `chatgpt.com` URL. The workflow observes the current UI rather than assuming fixed selectors, sends once, and reads the selected answer with its links. An ambiguous send is not automatically retried.

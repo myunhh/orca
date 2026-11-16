@@ -11,9 +11,16 @@ import type { LocalGitProvider } from '../../../providers/local-git-provider'
 import {
   localGitOptionsForTarget,
   requireRuntimeGitProvider,
+  runtimeGitRouteForTarget,
   type RuntimeGitCommandHost,
   type RuntimeGitTarget
 } from './runtime-git-command-target'
+import {
+  prepareWorktreePushTargetWithExec,
+  restoreUpstreamAfterMaterialize
+} from '../../../git/remotes/worktree-push-target-setup'
+import { assertValidGitPushTarget } from '../../../../shared/git/remotes/git-push-target-validation'
+import { runWithGitOperationLock } from '../../../../shared/git/commands/git-operation-lock'
 
 export class RuntimeGitSyncCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
@@ -24,6 +31,35 @@ export class RuntimeGitSyncCommands {
     pushTarget: GitPushTarget | undefined
   ): Promise<{ provider: LocalGitProvider; pushTarget: GitPushTarget | undefined }> {
     const provider = requireRuntimeGitProvider(target)
+    const route = runtimeGitRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      if (!pushTarget?.remoteUrl || pushTarget.remoteCreated) {
+        return { provider, pushTarget }
+      }
+      assertValidGitPushTarget(pushTarget)
+      const execGit = (args: string[], cwd: string) =>
+        provider.exec(args, cwd, { timeoutMs: 60_000 })
+      await execGit(['check-ref-format', '--branch', pushTarget.branchName], target.worktree.path)
+      const materialized = await runWithGitOperationLock(
+        `${target.executionHostId}\0${target.worktree.path}`,
+        undefined,
+        async () => {
+          const prepared = await prepareWorktreePushTargetWithExec(
+            execGit,
+            target.worktree.path,
+            pushTarget,
+            (remoteName) =>
+              target.worktree.pushTarget?.remoteCreated === true &&
+              target.worktree.pushTarget.remoteName === remoteName
+          )
+          return restoreUpstreamAfterMaterialize(execGit, target.worktree.path, prepared)
+        }
+      )
+      if (materialized.remoteCreated) {
+        this.host.persistMaterializedPushTarget?.(target.worktree, materialized)
+      }
+      return { provider, pushTarget: materialized }
+    }
     const materialized = pushTarget
       ? await materializeWorktreePushTargetRemote(
           target.worktree.path,

@@ -45,6 +45,11 @@ import {
   type PreviewSender,
   type PreviewUrl
 } from './preview-grant-registry'
+import {
+  captureSshPreviewFile,
+  assertSshPreviewFileCurrent,
+  readSshPreviewRange
+} from './ssh-preview-file'
 
 export { revokeRemoteFilePreviewGrants } from './preview-grant-registry'
 
@@ -68,10 +73,37 @@ export async function readLocalFilePreview(
   if (!named) {
     return null
   }
+  if (target.connectionId != null) {
+    if (!streamsPreviewByRange(named) && !options.documents) {
+      return null
+    }
+    const lifetime = abortWhenRendererGone(event.sender)
+    try {
+      const file = await captureSshPreviewFile(target.connectionId, target.filePath)
+      const preview = filePreviewForPath(file.path)
+      if (!preview || (!streamsPreviewByRange(preview) && !isDocumentPreview(preview))) {
+        return null
+      }
+      const readPrefix = incrementalPrefixReader((offset, length) =>
+        readSshPreviewRange(file, offset, length, lifetime.signal)
+      )
+      if (
+        isDocumentPreview(preview) &&
+        !prefixFitsDocumentPreview(preview, await readPrefix(DOCUMENT_SIGNATURE_PROBE_BYTES))
+      ) {
+        return null
+      }
+      await assertPreviewableRasterHeader(preview, readPrefix, file.size)
+      lifetime.signal.throwIfAborted()
+      return mintPreviewUrl(event.sender, target, store, preview, undefined, file.size, file)
+    } finally {
+      lifetime.dispose()
+    }
+  }
   if (streamsPreviewByRange(named)) {
     return mintPreviewUrl(event.sender, target, store, named)
   }
-  if (!options.documents || target.connectionId) {
+  if (!options.documents) {
     return null
   }
   const lifetime = abortWhenRendererGone(event.sender)
@@ -214,9 +246,17 @@ export async function handleMediaPreviewRequest(request: Request): Promise<Respo
     return handleRemotePreviewRequest(request, token, grant)
   }
   try {
-    // This process cannot serve SSH filesystems.
-    if (target.connectionId) {
-      return new Response(null, { status: 404 })
+    if (target.connectionId != null) {
+      const file = grant.ssh
+      if (!file || file.connectionId !== target.connectionId) {
+        return new Response(null, { status: 404 })
+      }
+      await assertSshPreviewFileCurrent(file)
+      return await createMediaRangeResponse(request, mimeType, {
+        size: file.size,
+        read: (offset, length) => readSshPreviewRange(file, offset, length, request.signal),
+        close: async () => {}
+      })
     }
     const { handle, stats } = await openLocalPreviewGrantFile(grant, target, store)
     try {

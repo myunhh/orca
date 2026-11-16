@@ -11,6 +11,7 @@ import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { callFileOpen } from './file-open-call'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
+import { FILE_DISTRIBUTION_HANDLERS } from './file-distribution'
 
 type FileOpenMode = 'edit' | 'diff'
 type OpenChangedMode = FileOpenMode | 'both'
@@ -201,6 +202,7 @@ function formatFileDiff(result: RuntimeFileOpenResult): string {
 }
 
 export const FILE_HANDLERS: Record<string, CommandHandler> = {
+  ...FILE_DISTRIBUTION_HANDLERS,
   'file open': async (ctx) => {
     const path = getRequiredStringFlag(ctx.flags, 'path')
     const position = getFileOpenPosition(ctx.flags)

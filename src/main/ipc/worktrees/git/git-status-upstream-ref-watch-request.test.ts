@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../../persistence/loading-store/store'
+import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
 
 const mocks = vi.hoisted(() => ({
   gitExec: vi.fn(),
+  sshExec: vi.fn(),
+  remoteWatch: vi.fn(),
+  stopRemoteWatch: vi.fn(),
   resolveRegisteredPath: vi.fn(),
   getLocalRepo: vi.fn(),
   getLocalOptions: vi.fn(),
@@ -29,9 +33,15 @@ vi.mock('../../local-worktree-runtime-options', () => ({
 vi.mock('../creation/worktree-base-directory-watcher', () => ({
   setWorktreeGitStatusRefWatch: mocks.setWatch
 }))
+vi.mock('../../../providers/ssh-git-dispatch', () => ({
+  requireSshGitProvider: () => ({ exec: mocks.sshExec }),
+  getSshGitProviderGeneration: () => 7
+}))
+vi.mock('../../../providers/ssh-filesystem-dispatch', () => ({
+  requireSshFilesystemProvider: () => ({ watch: mocks.remoteWatch })
+}))
 
 import { applyGitStatusUpstreamRefWatchRequest } from './git-status-upstream-ref-watch-request'
-import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { WslDistroStoppedError } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 describe('applyGitStatusUpstreamRefWatchRequest', () => {
@@ -70,24 +80,50 @@ describe('applyGitStatusUpstreamRefWatchRequest', () => {
     )
   })
 
-  it('binds the SSH watch but refuses to resolve on an SSH host', async () => {
-    await expect(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SSH refusal throws before any store read.
-      applyGitStatusUpstreamRefWatchRequest({} as Store, {
+  it('resolves and watches the selected SSH upstream without local disk access', async () => {
+    const controller = new AbortController()
+    mocks.setWatch.mockImplementation(
+      async (_args: unknown, resolve: (signal: AbortSignal) => Promise<string | undefined>) =>
+        resolve(controller.signal)
+    )
+    mocks.sshExec
+      .mockResolvedValueOnce({
+        stdout:
+          'refs/heads/feature/main\0refs/remotes/team/fork/feature/main\0team/fork/feature/main\n'
+      })
+      .mockResolvedValueOnce({ stdout: '.git\n' })
+    mocks.remoteWatch.mockResolvedValue(mocks.stopRemoteWatch)
+    const changed = vi.fn()
+    await applyGitStatusUpstreamRefWatchRequest(
+      {} as Store,
+      {
         worktreeId: 'repo-1::/repo',
         worktreePath: '/repo',
         executionHostId: 'ssh:ssh-1',
         connectionId: 'ssh-1',
         branch: 'refs/heads/feature/main',
         upstreamName: 'team/fork/feature/main'
-      })
-    ).rejects.toThrow(SshHostNotServedError)
-
+      },
+      changed
+    )
     expect(mocks.setWatch).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'ssh-1' }),
+      expect.objectContaining({ connectionId: 'ssh-1', providerGeneration: 7 }),
       expect.any(Function)
     )
+    expect(mocks.remoteWatch).toHaveBeenCalledWith(
+      '/repo/.git',
+      expect.any(Function),
+      expect.objectContaining({ signal: controller.signal })
+    )
+    const onEvents: (events: FsChangeEvent[]) => void = mocks.remoteWatch.mock.calls[0][1]
+    onEvents([{ kind: 'update', absolutePath: '/repo/.git/objects/ab/unused' }])
+    expect(changed).not.toHaveBeenCalled()
+    onEvents([{ kind: 'update', absolutePath: '/repo/.git/refs/remotes/team/fork/feature/main' }])
+    expect(changed).toHaveBeenCalledOnce()
+    controller.abort()
+    expect(mocks.stopRemoteWatch).toHaveBeenCalledOnce()
     expect(mocks.gitExec).not.toHaveBeenCalled()
+    expect(mocks.resolveRegisteredPath).not.toHaveBeenCalled()
   })
 
   it('does not run Git in a stopped WSL distro (E9)', async () => {

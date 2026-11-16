@@ -15,10 +15,11 @@ export function isManagedOrcadSshTarget(target: SshTarget): boolean {
   return target.orcadFence !== undefined || target.orcadProvisioning !== undefined
 }
 
-/** Managed hosts cannot serve direct relays unless older retained projects still require their previous relay. */
+/** Managed ownership stays authoritative until the user explicitly migrates its data. */
 export function allowsDirectSshRelay(target: SshTarget): boolean {
-  if (target.orcadProvisioning) {
-    return false
-  }
-  return !target.orcadFence || target.orcadFence.sourceChangedAt !== undefined
+  return (
+    !isRuntimeOwnedSshTarget(target) &&
+    !isManagedOrcadSshTarget(target) &&
+    !target.managedServerRemoved
+  )
 }

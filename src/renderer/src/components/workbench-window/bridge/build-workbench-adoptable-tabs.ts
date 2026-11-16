@@ -51,6 +51,9 @@ function adoptableView(
       isImage: false
     }
   }
+  if (tab.contentType === 'browser') {
+    return { ...common, kind: 'browser', agentState: null, isImage: false }
+  }
   const file = state.openFiles.find((candidate) => candidate.id === tab.entityId)
   return {
     ...common,

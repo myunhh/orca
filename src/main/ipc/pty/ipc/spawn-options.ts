@@ -50,7 +50,7 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
     claudeAuth: ctx.claudeAuth
   })
   ctx.spawnOptions = launch.spawnOptions
-  if (args.wslPassiveRestore === true) {
+  if (!args.connectionId && args.wslPassiveRestore === true) {
     ctx.spawnOptions.wslPassiveRestore = true
   }
   if (ctx.wslHoldReadAnchor !== undefined) {

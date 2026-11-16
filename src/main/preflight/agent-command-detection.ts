@@ -1,4 +1,3 @@
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { detectWslCommandsOnPath } from '../ipc/preflight-wsl-agent-detection'
 import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
 import {
@@ -12,11 +11,8 @@ import { hasPathSeparatorToken } from '../../shared/managed-agent-command-token'
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
-  options: { connectionId?: string | null; context?: PreflightRuntimeContext } = {}
+  options: { context?: PreflightRuntimeContext } = {}
 ): Promise<Set<string>> {
-  if (options.connectionId) {
-    throw new SshHostNotServedError(options.connectionId)
-  }
   const context = options.context
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {

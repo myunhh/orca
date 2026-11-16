@@ -1,5 +1,5 @@
 import type { SshConnectionCallbacks } from '../../ssh/connection/ssh-connection-callbacks'
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import { isSshHostCensusInFlight } from '../../ssh/connection/ssh-connection-attribution'
 import {
   clearSshCredentialDeclined,
@@ -16,6 +16,14 @@ import { recordSshSignInRequirement } from './ssh-sign-in-requirement'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
 import { requestCredential } from './ssh-passphrase'
 import { broadcastSshState } from './ssh-renderer-broadcast'
+import { activeSessions } from './ssh-active-relay-sessions'
+import { handleRelayTransportState } from './ssh-relay-transport-state'
+
+export function relayGracePeriodForTarget(
+  target: SshTarget | null | undefined
+): number | undefined {
+  return target?.relayGracePeriodSeconds
+}
 
 export function handleSshConnectionStateChange(targetId: string, state: SshConnectionState): void {
   if (state.status === 'connected') {
@@ -23,6 +31,10 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
     recordSshSignInRequirement(targetId, getSshTargetRegistryStore(), connectionManager)
   }
   if (testingTargets.has(targetId)) {
+    return
+  }
+  if (activeSessions.has(targetId)) {
+    handleRelayTransportState(targetId, state)
     return
   }
   if (

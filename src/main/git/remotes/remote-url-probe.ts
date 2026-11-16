@@ -4,6 +4,10 @@ import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import {
+  requireSshGitProvider,
+  getSshGitProviderGeneration
+} from '../../providers/ssh-git-dispatch'
 
 // Bound config probes so stalled mounts or WSL cannot hold every forge lookup indefinitely.
 export const REMOTE_URL_PROBE_TIMEOUT_MS = 30_000
@@ -31,19 +35,18 @@ export async function withSharedRemoteUrlReads<T>(work: () => Promise<T>): Promi
   }
 }
 
-/** Reads a remote URL, or null for an SSH repo, which this process does not serve. */
+/** Read Git configuration on the owning host; transport failures are not remote absence. */
 export async function readRemoteUrl(
   context: RemoteUrlProbeContext,
   remoteName: string
 ): Promise<string | null> {
-  if (context.connectionId) {
-    return null
-  }
   const scope = sharedRemoteUrlReads.getStore()
   if (!scope?.open) {
     return readUncachedRemoteUrl(context, remoteName)
   }
   const key = [
+    context.connectionId ?? '',
+    context.connectionId ? getSshGitProviderGeneration(context.connectionId) : '',
     context.wslDistro ?? '',
     context.admissionTier ?? '',
     context.repoPath,
@@ -61,6 +64,14 @@ async function readUncachedRemoteUrl(
   context: RemoteUrlProbeContext,
   remoteName: string
 ): Promise<string> {
+  if (context.connectionId) {
+    const { stdout } = await requireSshGitProvider(context.connectionId).exec(
+      ['remote', 'get-url', remoteName],
+      context.repoPath,
+      { timeoutMs: REMOTE_URL_PROBE_TIMEOUT_MS }
+    )
+    return stdout
+  }
   const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
     cwd: context.repoPath,
     timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
@@ -114,7 +125,9 @@ export async function assertRemoteUrlReadable(
   context: RemoteUrlProbeContext,
   remoteName = 'origin'
 ): Promise<void> {
-  requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
+  if (!context.connectionId) {
+    requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
+  }
   try {
     await readRemoteUrl(context, remoteName)
   } catch (error) {

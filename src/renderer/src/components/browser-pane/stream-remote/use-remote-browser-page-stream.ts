@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { readRemoteBrowserCssViewport } from './remote-browser-css-viewport'
 
 import { decodeBrowserScreencastFrame } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
@@ -12,11 +12,14 @@ import type {
 import { useRemoteBrowserStreamActivation } from './use-remote-browser-stream-activation'
 import {
   decodeRemoteBrowserFrameUrl,
-  readRemoteCssViewportSize,
   type RemoteBrowserPaneNotice,
   type RemoteBrowserRuntimeTarget,
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
+import {
+  forwardWorkbenchBrowserFrame,
+  registerWorkbenchBrowserReconnect
+} from '@/components/workbench-window/bridge/workbench-browser-presentation'
 
 export function useRemoteBrowserPageStream({
   activeRuntimeEnvironmentId,
@@ -130,23 +133,11 @@ export function useRemoteBrowserPageStream({
         return
       }
       // The stream owns fitted emulation; an unowned browser.viewport would overwrite it with a size the host cannot paint.
-      try {
-        // Why: the streamed bitmap can include the host compositor surface, but CDP input wants the guest page's CSS viewport coords.
-        const viewport = await callRuntimeRpc(
-          target,
-          'browser.eval',
-          {
-            worktree: runtimeWorktree,
-            page: pageId,
-            expression: 'JSON.stringify({ width: window.innerWidth, height: window.innerHeight })'
-          },
-          { timeoutMs: 15_000, suppressFeatureInteraction: true }
-        )
-        remoteCssViewportSizeRef.current = readRemoteCssViewportSize(viewport)
-      } catch {
-        // Unknown: pointer mapping falls back to the requested and per-frame sizes.
-        remoteCssViewportSizeRef.current = null
-      }
+      remoteCssViewportSizeRef.current = await readRemoteBrowserCssViewport(
+        target,
+        runtimeWorktree,
+        pageId
+      )
     },
     [readRemoteViewportSize, remoteCssViewportSizeRef, runtimeTarget, runtimeWorktree]
   )
@@ -208,6 +199,18 @@ export function useRemoteBrowserPageStream({
       if (!frame) {
         return
       }
+      if (
+        forwardWorkbenchBrowserFrame(
+          browserPageId,
+          bytes,
+          frame.metadata,
+          remoteCssViewportSizeRef.current,
+          remoteViewportSizeRef.current
+        )
+      ) {
+        setPaneBusy(false)
+        return
+      }
       const imageBuffer = frame.image.buffer.slice(
         frame.image.byteOffset,
         frame.image.byteOffset + frame.image.byteLength
@@ -251,12 +254,14 @@ export function useRemoteBrowserPageStream({
         })
     },
     [
+      browserPageId,
       lifecycle,
       pendingFrameDecodeRef,
       remoteCssViewportSizeRef,
       setFrameMetadata,
       syncRemoteViewport,
       setFrameUrl,
+      remoteViewportSizeRef,
       setPaneBusy,
       streamFrameUrlRef
     ]
@@ -287,6 +292,10 @@ export function useRemoteBrowserPageStream({
     setPaneNotice(null)
     setReopenNonce((nonce) => nonce + 1)
   }, [setPaneNotice])
+  useEffect(
+    () => registerWorkbenchBrowserReconnect(browserPageId, reconnectRemoteStream),
+    [browserPageId, reconnectRemoteStream]
+  )
 
   useRemoteBrowserStreamActivation({
     activeRuntimeEnvironmentId,

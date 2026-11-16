@@ -14,12 +14,21 @@ import {
   ExecutionHostNotDispatchableError,
   resolveGitRouteForHost
 } from '../../providers/execution-host-provider-dispatch'
-import {
-  SshHostNotServedError,
-  SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE
-} from '../../providers/ssh-host-not-served-error'
+import { requireSshGitProvider } from '../../providers/ssh-git-dispatch'
+import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
+import type { SshGitProvider } from '../../providers/ssh-git-provider'
+import type { IFilesystemProvider } from '../../providers/filesystem-provider-contract'
+import { getActiveSshHostHomeDirectory } from '../../ssh/targets/ssh-target-registry'
 
-export type WorktreeRemovalRoute = { kind: 'local'; hostId: typeof LOCAL_EXECUTION_HOST_ID }
+export type WorktreeRemovalRoute =
+  | { kind: 'local'; hostId: typeof LOCAL_EXECUTION_HOST_ID }
+  | {
+      kind: 'ssh'
+      hostId: `ssh:${string}`
+      connectionId: string
+      provider: SshGitProvider
+      fsProvider: IFilesystemProvider | null
+    }
 
 export function resolveWorktreeRemovalRoute(hostId: ExecutionHostId): WorktreeRemovalRoute {
   const route = resolveGitRouteForHost(hostId)
@@ -29,7 +38,13 @@ export function resolveWorktreeRemovalRoute(hostId: ExecutionHostId): WorktreeRe
     case 'runtime':
       throw new ExecutionHostNotDispatchableError(route.hostId)
     case 'ssh':
-      throw new SshHostNotServedError(route.connectionId, SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE)
+      return {
+        kind: 'ssh',
+        hostId: route.hostId,
+        connectionId: route.connectionId,
+        provider: requireSshGitProvider(route.connectionId),
+        fsProvider: getSshFilesystemProvider(route.connectionId) ?? null
+      }
   }
 }
 
@@ -49,6 +64,7 @@ export function resolveWorktreeRemovalHomeForHost(
       return CLIENT_REMOVAL_HOME
     // Only a local host may use this client's home as deletion authority.
     case 'ssh':
+      return executionHostRemovalHome(getActiveSshHostHomeDirectory(parsed.targetId))
     case 'runtime':
     case undefined:
       return executionHostRemovalHome(null)

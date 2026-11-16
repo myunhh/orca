@@ -25,6 +25,7 @@ import { RuntimeStagedFileSaves } from '../files/staged-file-save-commands'
 import { RuntimeFileWatches } from '../files/watch/file-watches'
 import { RuntimeTerminalPathResolver } from '../terminal/terminal-path-resolver'
 import type { RuntimeFileCommandHost } from '../files/file-command-host'
+import { currentFileExecutionHost } from '../files/file-execution-host-scope'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -82,6 +83,10 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     getRuntimeId: () => this.runtimeId,
     requireStore: () => this.requireStore(),
     resolveRuntimeFileTarget: async (selector) => {
+      const hostId = currentFileExecutionHost()
+      if (hostId !== undefined && hostId !== LOCAL_EXECUTION_HOST_ID) {
+        return this.resolveRuntimeFileTarget(selector)
+      }
       // Scratch folders are file-only; the general resolver also places chats.
       const scratchFolder = await resolveChatScratchSelectorFolder(selector)
       return scratchFolder

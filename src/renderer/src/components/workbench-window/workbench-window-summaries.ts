@@ -4,7 +4,12 @@ import { workbenchTabLabel } from './workbench-tab-label'
 
 type SummaryState = Pick<
   AppState,
-  'detachedWindowIdByTabId' | 'unifiedTabsByWorktree' | 'tabsByWorktree' | 'openFiles' | 'settings'
+  | 'detachedWindowIdByTabId'
+  | 'unifiedTabsByWorktree'
+  | 'tabsByWorktree'
+  | 'browserTabsByWorktree'
+  | 'openFiles'
+  | 'settings'
 >
 
 export type WorkbenchWindowSummary = {

@@ -9,16 +9,12 @@ import {
   resolveLocalRequestPath
 } from './access/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { resolveLocalDroppedPathsForAgent } from '../dropped-path-resolution'
+import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/connection/authority/ssh-connection-generation'
 import { renameLocalPathSerializedByDestination } from '../../filesystem/destination-serialized-local-rename'
 import { assertNotExists, rethrowWithUserMessage } from './filesystem-create-path-guards'
-import type {
-  ImportItemResult,
-  ResolveDroppedPathsResult
-} from '../../../shared/file-import/filesystem-import-result'
+import type { ImportItemResult } from '../../../shared/file-import/filesystem-import-result'
 import type {
   StagedRuntimeUploadSource as StagedExternalImportSource,
   RuntimeUploadFileStreamRequest
@@ -33,6 +29,8 @@ import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from '../runtime-upload-temp-sweep'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
+import { importExternalPathsSsh } from './filesystem-import-ssh'
+import { registerFilesystemDroppedPathHandlers } from './filesystem-dropped-path-handlers'
 
 export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
@@ -47,8 +45,8 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        return requireSshFilesystemProvider(args.connectionId).createFile(args.filePath)
       }
       const filePath = windowsFsPath(await resolveDesktopAuthorizedPath(args.filePath, store))
       await mkdir(dirname(filePath), { recursive: true })
@@ -73,8 +71,8 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        return requireSshFilesystemProvider(args.connectionId).createDirNoClobber(args.dirPath)
       }
       const dirPath = windowsFsPath(await resolveDesktopAuthorizedPath(args.dirPath, store))
       await assertNotExists(dirPath)
@@ -100,8 +98,11 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        return requireSshFilesystemProvider(args.connectionId).renameNoClobber(
+          args.oldPath,
+          args.newPath
+        )
       }
       // Preserve both leaves: rename acts on directory entries, including links; opened documents can move outside project roots.
       const { from, to } = await resolveLocalRenamePaths(
@@ -130,8 +131,11 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        return requireSshFilesystemProvider(args.connectionId).copy(
+          args.sourcePath,
+          args.destinationPath
+        )
       }
       const sourcePath = await resolveDesktopAuthorizedPath(args.sourcePath, store, {
         preserveSymlink: true
@@ -152,7 +156,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
     'fs:importExternalPaths',
     async (
-      _event,
+      event,
       args: {
         sourcePaths: string[]
         destDir: string
@@ -167,8 +171,23 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        const lifetime = abortWhenRendererGone(event.sender)
+        try {
+          return await importExternalPathsSsh(args.sourcePaths, args.destDir, args.connectionId, {
+            ensureDir: args.ensureDir,
+            signal: lifetime.signal,
+            assertCurrent: () =>
+              assertSshMutationExpectation(
+                args.connectionId,
+                args.expectedSshTargetId,
+                args.expectedSshConnectionGeneration,
+                args.expectedExecutionHostId
+              )
+          })
+        } finally {
+          lifetime.dispose()
+        }
       }
 
       // Authorize before copying; opened-document images may target that document's own folder.
@@ -244,32 +263,5 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  // Terminal drops reference local paths in place; explorer imports copy into a picked destination.
-  ipcMain.handle(
-    'fs:resolveDroppedPathsForAgent',
-    async (
-      _event,
-      args: {
-        paths: string[]
-        worktreePath: string
-        connectionId?: string
-      } & SshMutationExpectation
-    ): Promise<ResolveDroppedPathsResult> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      // Empty connection IDs are errors; only null/undefined selects local routing.
-      if (args.connectionId == null) {
-        return {
-          resolvedPaths: resolveLocalDroppedPathsForAgent(args.paths, args.worktreePath),
-          skipped: [],
-          failed: []
-        }
-      }
-      throw new SshHostNotServedError(args.connectionId)
-    }
-  )
+  registerFilesystemDroppedPathHandlers()
 }

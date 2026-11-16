@@ -21,6 +21,7 @@ import {
   closeFileExplorerWatcherInWatcherProcess,
   watchFileExplorerInWatcherProcess
 } from './file-watcher-host'
+import { requireSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
 
 type RuntimeFileWatchHost = Pick<
   RuntimeFileCommandHost,
@@ -59,6 +60,14 @@ export class RuntimeFileWatches {
     }> => {
       const finishInstall = beginWatcherInstall(target.path, sshTargetId)
       try {
+        if (sshTargetId) {
+          const provider = requireSshFilesystemProvider(sshTargetId)
+          const dispose = await provider.watch(target.path, callback, { signal, onTerminalError })
+          return {
+            unsubscribe: async () => dispose(),
+            rootPaths: [target.path]
+          }
+        }
         requireLocalRuntimeFileRoute(target)
         const rootPath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
         const rootStats = await stat(rootPath)

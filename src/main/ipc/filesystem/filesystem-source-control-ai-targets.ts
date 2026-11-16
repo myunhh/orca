@@ -11,6 +11,11 @@ import { listRepoWorktreeGraph } from '../../workspaces/catalog/repo-worktrees'
 import { resolveAuthorizedPath } from './access/filesystem-auth'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { splitWorktreeId } from '../../../shared/worktree/id'
+import {
+  getConnectionExecutionHostId,
+  getRepoExecutionHostId
+} from '../../../shared/execution-host'
+import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 
 function comparableLocalPath(value: string): string {
   const normalized = resolve(value)
@@ -29,7 +34,9 @@ function hasRegisteredWorktreeMetaForRepo(
   repoId: string,
   candidatePaths: Set<string>
 ): boolean {
-  for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
+  for (const worktreeId of Object.keys(
+    readAllWorktreeMetaForHost(store, getConnectionExecutionHostId(undefined))
+  )) {
     const parsed = splitWorktreeId(worktreeId)
     if (parsed?.repoId === repoId && candidatePaths.has(comparableLocalPath(parsed.worktreePath))) {
       return true
@@ -44,14 +51,16 @@ function comparableRemotePath(value: string): string {
 
 function hasRegisteredRemoteWorktreeMetaForRepo(
   store: Store,
-  repoId: string,
+  repo: Repo,
   worktreePath: string
 ): boolean {
   const comparableWorktreePath = comparableRemotePath(worktreePath)
-  for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
+  for (const worktreeId of Object.keys(
+    readAllWorktreeMetaForHost(store, getRepoExecutionHostId(repo))
+  )) {
     const parsed = splitWorktreeId(worktreeId)
     if (
-      parsed?.repoId === repoId &&
+      parsed?.repoId === repo.id &&
       comparableRemotePath(parsed.worktreePath) === comparableWorktreePath
     ) {
       return true
@@ -93,7 +102,7 @@ async function localRepoOwnsWorktree(
 function remoteRepoOwnsWorktree(store: Store, repo: Repo, worktreePath: string): boolean {
   return (
     comparableRemotePath(repo.path) === comparableRemotePath(worktreePath) ||
-    hasRegisteredRemoteWorktreeMetaForRepo(store, repo.id, worktreePath)
+    hasRegisteredRemoteWorktreeMetaForRepo(store, repo, worktreePath)
   )
 }
 
@@ -104,19 +113,18 @@ export async function getRepoForSourceControlAi(
   if (!args.repoId) {
     return null
   }
-  const repo = store.getRepo(args.repoId)
+  const hostId = getConnectionExecutionHostId(args.connectionId)
+  const repo = store
+    .getRepos()
+    .find(
+      (candidate) => candidate.id === args.repoId && getRepoExecutionHostId(candidate) === hostId
+    )
   if (!repo) {
     return null
   }
   if (args.connectionId) {
-    if (repo.connectionId !== args.connectionId) {
-      return null
-    }
     // Shared SSH connections can host several repos; apply overrides only to the verified owner.
     return remoteRepoOwnsWorktree(store, repo, args.worktreePath) ? repo : null
-  }
-  if (repo.connectionId) {
-    return null
   }
   // Renderer repoId is advisory until local worktree ownership is verified.
   return (await localRepoOwnsWorktree(store, repo, args.worktreePath)) ? repo : null

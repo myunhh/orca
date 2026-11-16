@@ -11,6 +11,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     shellOverride: ctx.effectiveShellOverride
   })
   const hostEnv = await resolvePtySpawnHostEnv({
+    connectionId: args.connectionId,
     launchAgent: args.launchAgent,
     command: args.command,
     resumeProviderSession: args.resumeProviderSession,

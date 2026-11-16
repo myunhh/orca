@@ -58,12 +58,13 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   /** Grant global keyboard chords to one workspace even when another overlay workspace remains visible. */
   ownsNativeChatToggleShortcut?: boolean
 }): React.JSX.Element | null {
-  const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
+  const { terminalTabs, unifiedTabs, groups, activeGroupId, detachedWindowIdByTabId } = useAppStore(
     useShallow((state) => ({
       terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
       groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
-      activeGroupId: state.activeGroupIdByWorktree[worktreeId]
+      activeGroupId: state.activeGroupIdByWorktree[worktreeId],
+      detachedWindowIdByTabId: state.detachedWindowIdByTabId
     }))
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
@@ -99,11 +100,13 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
       entries.set(tab.entityId, {
         unifiedTabId: tab.id,
         groupId: tab.groupId,
-        isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id
+        isActiveInGroup:
+          groupActiveTabById[tab.groupId] === tab.id &&
+          detachedWindowIdByTabId[tab.id] === undefined
       })
     }
     return entries
-  }, [groupActiveTabById, unifiedTabs])
+  }, [detachedWindowIdByTabId, groupActiveTabById, unifiedTabs])
 
   const activeTerminalTabId = useMemo(() => {
     if (!activeGroupId) {
@@ -153,10 +156,14 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
           ) : null
         }
         const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
-        const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
-          worktreeId,
-          tabId: terminalTab.id
-        })
+        const isDetached =
+          assignment !== undefined && detachedWindowIdByTabId[assignment.unifiedTabId] !== undefined
+        const activityTerminalPortal = isDetached
+          ? null
+          : findActivityTerminalPortal(activityTerminalPortals, {
+              worktreeId,
+              tabId: terminalTab.id
+            })
         if (parkedTerminalTabIds.has(terminalTab.id)) {
           return null
         }

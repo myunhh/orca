@@ -115,4 +115,29 @@ describe('RateLimitService', () => {
       }
     ])
   })
+
+  it('clears previous usage when an inactive account requires human sign-in', async () => {
+    const service = new RateLimitService()
+    service.setInactiveClaudeAccountsResolver(() => [{ id: 'account-1' }])
+    vi.mocked(fetchInactiveClaudeAccountUsage).mockResolvedValueOnce(okProvider('claude', 42))
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    vi.setSystemTime(1_700_000_061_000)
+    vi.mocked(fetchInactiveClaudeAccountUsage).mockResolvedValueOnce({
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      status: 'error',
+      error: 'Sign in again',
+      usageMetadata: { failureKind: 'missing-credentials' }
+    })
+
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    expect(service.getState().inactiveClaudeAccounts[0].rateLimits).toMatchObject({
+      session: null,
+      status: 'error',
+      usageMetadata: { failureKind: 'missing-credentials' }
+    })
+  })
 })

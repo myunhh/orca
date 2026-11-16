@@ -124,7 +124,7 @@ export async function buildRuntimePtySpawnOptions(
   if (args.signal) {
     ctx.spawnOptions.signal = args.signal
   }
-  if (isRuntimeWslBackgroundStart(ctx)) {
+  if (!args.connectionId && isRuntimeWslBackgroundStart(ctx)) {
     ctx.spawnOptions.wslBackgroundStart = true
   }
   if (ctx.wslHoldReadAnchor !== undefined) {

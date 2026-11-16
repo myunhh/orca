@@ -15,8 +15,18 @@ import {
 } from '../git/source-control/porcelain-v1-records'
 import { resolveDefaultBaseRefViaExec } from '../../shared/git/refs/git-default-base-ref'
 import { getUpstreamStatus } from '../git/source-control/upstream'
-import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
-import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
+import {
+  findExistingWorktreeSymlinkPaths,
+  getSafeRelativePath
+} from '../git/worktrees/content-paths/worktree-symlink-detection'
+import {
+  requireReachableGitRoute,
+  resolveGitRouteForHost
+} from '../providers/execution-host-provider-dispatch'
+import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
+import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { resolveRuntimePath } from '../../shared/cross-platform-path'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   getHostedReviewLocalGitOptions,
@@ -111,7 +121,7 @@ async function listSuffixRemoteBaseRefs(
   }
 }
 
-/** Require an explicit local route: nullable connectionId conflates local, unresolved and remote-host ownership. */
+/** Route Git from explicit host identity; local credentials never change the repository's owner. */
 async function runGitForHostedReview(
   repoPath: string,
   args: string[],
@@ -119,6 +129,21 @@ async function runGitForHostedReview(
   options: HostedReviewExecutionOptions = {},
   commandOptions: HostedReviewGitRunOptions = {}
 ): Promise<{ stdout: string; stderr?: string }> {
+  const route = resolveGitRouteForHost(executionHostId)
+  if (route.kind === 'ssh') {
+    const result = await requireSshGitProvider(route.connectionId).exec(
+      args,
+      repoPath,
+      commandOptions.timeoutMs === undefined ? {} : { timeoutMs: commandOptions.timeoutMs }
+    )
+    if (
+      commandOptions.maxBuffer !== undefined &&
+      Buffer.byteLength(result.stdout, 'utf8') > commandOptions.maxBuffer
+    ) {
+      throw new Error('Hosted review Git output exceeded its configured limit.')
+    }
+    return result
+  }
   requireReachableGitRoute(executionHostId)
   return gitExecFileAsync(args, {
     cwd: repoPath,
@@ -213,6 +238,38 @@ export async function hasUncommittedChanges(
   executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
+  const route = resolveGitRouteForHost(executionHostId)
+  if (route.kind === 'ssh') {
+    const { stdout } = await runGitForHostedReview(
+      repoPath,
+      ['--no-optional-locks', 'status', '--porcelain', '-z'],
+      executionHostId,
+      options
+    )
+    const records = parsePorcelainV1Records(stdout)
+    if (records.length === 0) {
+      return false
+    }
+    const sharedLinkPaths = options.sharedLinkPaths ?? []
+    if (sharedLinkPaths.length === 0 || !records.some((record) => record.xy === '??')) {
+      return true
+    }
+    const provider = requireSshFilesystemProvider(route.connectionId)
+    const verifiedLinks = await mapWithConcurrency(sharedLinkPaths, 8, async (path) => {
+      const safe = getSafeRelativePath(path)
+      if (!safe.safe || !provider.lstat) {
+        return null
+      }
+      try {
+        const metadata = await provider.lstat(resolveRuntimePath(repoPath, safe.rel))
+        return metadata.type === 'symlink' ? safe.rel : null
+      } catch {
+        return null
+      }
+    })
+    const sharedLinks = new Set(verifiedLinks)
+    return records.some((record) => record.xy !== '??' || !sharedLinks.has(record.path))
+  }
   requireReachableGitRoute(executionHostId)
   // NUL-delimited raw paths keep Git quoting from defeating shared-link matching.
   const { stdout } = await gitExecFileAsync(['status', '--porcelain', '-z'], {
@@ -252,6 +309,10 @@ export async function getHostedReviewUpstreamStatus(
   executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<GitUpstreamStatus> {
+  const route = resolveGitRouteForHost(executionHostId)
+  if (route.kind === 'ssh') {
+    return requireSshGitProvider(route.connectionId).getUpstreamStatus(repoPath)
+  }
   requireReachableGitRoute(executionHostId)
   return getUpstreamStatus(repoPath, undefined, getHostedReviewLocalGitOptions(options))
 }

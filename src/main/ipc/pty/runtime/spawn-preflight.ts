@@ -3,7 +3,7 @@ import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import { getProvider } from '../provider/registry'
+import { getAppPtyId, getProvider } from '../provider/registry'
 import {
   isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
@@ -42,17 +42,21 @@ export async function prepareRuntimePtySpawn(
       await admission
     }
   }
-  // SSH execution is rejected here; remaining preparation belongs to this machine.
+  // Provider lookup rejects unavailable SSH owners; remote preparation never falls back locally.
   ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
-  const freshSpawnRecovery = ctx.preAdoptedStablePane
-    ? undefined
-    : recoverFreshSpawnProviderRouting(ctx.provider, args.sessionId, args.isNewSession)
+  const freshSpawnRecovery =
+    ctx.preAdoptedStablePane || args.connectionId
+      ? undefined
+      : recoverFreshSpawnProviderRouting(ctx.provider, args.sessionId, args.isNewSession)
   if (freshSpawnRecovery) {
     await freshSpawnRecovery
   }
-  ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
+  ctx.isClaudeLaunch =
+    !args.connectionId && !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
   ctx.isDaemonHostSpawn =
-    !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
+    !args.connectionId &&
+    !(ctx.provider instanceof LocalPtyProvider) &&
+    !routesFreshSpawnsToLocalProvider(ctx.provider)
   ctx.callerRequestedSessionId = args.sessionId
   ctx.requestedSessionId =
     ctx.callerRequestedSessionId ??
@@ -62,13 +66,15 @@ export async function prepareRuntimePtySpawn(
   ctx.sessionId =
     ctx.requestedSessionId ??
     (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
-  ctx.effectiveSessionAppId = ctx.sessionId
+  ctx.effectiveSessionAppId =
+    ctx.sessionId === undefined ? undefined : getAppPtyId(args.connectionId, ctx.sessionId)
   ctx.ownsNewIncarnation =
     !ctx.preAdoptedStablePane &&
     ctx.isDaemonHostSpawn &&
     (ctx.callerRequestedSessionId === undefined || args.isNewSession === true)
   // Runtime requests use planned command runtime, or project runtime plus explicit --shell; they have no renderer runtime.
   const target = await resolvePtySpawnStartupTarget({
+    connectionId: args.connectionId,
     worktreeId: args.worktreeId,
     cwd: args.cwd,
     sessionId: ctx.sessionId,
@@ -100,7 +106,9 @@ export async function prepareRuntimePtySpawn(
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  if (!args.connectionId) {
+    args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  }
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
@@ -128,9 +136,10 @@ export async function prepareRuntimePtySpawn(
     }
   }
   ctx.env = ctx.claudeAuth ? { ...args.env, ...ctx.claudeAuth.envPatch } : args.env
-  ctx.requestedAgentTeamsPath = ctx.env?.ORCA_AGENT_TEAMS_TEAM_ID
-    ? ctx.env[resolvePathEnvKey(ctx.env, process.platform)]
-    : undefined
+  ctx.requestedAgentTeamsPath =
+    !args.connectionId && ctx.env?.ORCA_AGENT_TEAMS_TEAM_ID
+      ? ctx.env[resolvePathEnvKey(ctx.env, process.platform)]
+      : undefined
   if (args.preAllocatedHandle) {
     ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
@@ -138,13 +147,15 @@ export async function prepareRuntimePtySpawn(
     // Clone caller environment before injection; another split may reuse it.
     ctx.env = { ...ctx.env }
     const pane = ptySpawnPaneFromIds(args)
-    const jcodeEnv = pane ? await ensureJcodeRuntimeDir(pane.paneKey) : undefined
+    const jcodeEnv =
+      !args.connectionId && pane ? await ensureJcodeRuntimeDir(pane.paneKey) : undefined
     stampPtySpawnPaneEnv(ctx.env, {
       pane,
       jcodeRuntimeDir: jcodeEnv?.[JCODE_RUNTIME_DIR_ENV_KEY]
     })
   }
   const hostEnv = await resolvePtySpawnHostEnv({
+    connectionId: args.connectionId,
     launchAgent: args.launchAgent,
     command: args.command,
     resumeProviderSession: args.resumeProviderSession,

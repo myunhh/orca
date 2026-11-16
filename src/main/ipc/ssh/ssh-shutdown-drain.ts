@@ -6,6 +6,10 @@ import {
 import { connectionManager, portForwardManager } from './ssh-ipc-context'
 import { shutdownOrcadManagedTunnels } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { closeAllPlainSshTerminals } from '../../ssh/plain-ssh-terminal/plain-ssh-terminal-sessions'
+import { activeSessions } from './ssh-active-relay-sessions'
+import { clearRelayLostBackoff } from './ssh-relay-lost-backoff'
+import { relayStateOverrides } from './ssh-renderer-broadcast'
+import { forgetRelayTransportState } from './ssh-relay-transport-state'
 
 // One absolute deadline bounds all phases, including connects stuck before their next cancellation checkpoint.
 export const SSH_SHUTDOWN_BUDGET_MS = 6_000
@@ -118,6 +122,13 @@ export function beginSshShutdown(): Promise<SshShutdownResult> {
   if (sshShutdownDrain) {
     return sshShutdownDrain
   }
+  for (const [targetId, session] of activeSessions) {
+    clearRelayLostBackoff(targetId)
+    forgetRelayTransportState(targetId)
+    session.beginShutdownDetach()
+  }
+  activeSessions.clear()
+  relayStateOverrides.clear()
   const inFlight: SshShutdownTask[] = [
     ...[...connectInFlight.entries()].map(([targetId, attempt]) => ({
       targetId,

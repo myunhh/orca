@@ -1,0 +1,22 @@
+import { forkProcess } from '@orca/process-host/fork-process'
+import type { ChildProcess } from 'node:child_process'
+import { join } from 'node:path'
+import { buildRelayAiVaultServiceEnv } from '../main/ai-vault/scan-service/session-scanner-service-env'
+import { lowerAiVaultServicePriority } from '../main/ai-vault/scan-service/session-scanner-service-priority'
+
+export function relayAiVaultServiceEntryPath(baseDir = __dirname): string {
+  return join(baseDir, 'relay-ai-vault-service.js')
+}
+
+export function spawnRelayAiVaultService(): ChildProcess {
+  const child = forkProcess({
+    modulePath: relayAiVaultServiceEntryPath(),
+    args: [],
+    stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+    execArgv: ['--max-old-space-size=384'],
+    env: buildRelayAiVaultServiceEnv()
+  })
+  lowerAiVaultServicePriority(child.pid)
+  child.unref()
+  return child
+}

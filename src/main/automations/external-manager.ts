@@ -14,8 +14,7 @@ import {
   type ExternalAutomationManagerCacheEntry
 } from './external-automation-manager-cache'
 import type { ExternalAutomationProbeScheduler } from './external-automation-probe-scheduler'
-import { listLocalManager } from './external-manager-discovery'
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import { listLocalManager, listRemoteManager } from './external-manager-discovery'
 import { runExternalAutomationAction } from './external-manager-mutations'
 
 export { runExternalAutomationAction }
@@ -49,10 +48,12 @@ export function createScopedExternalAutomations(
           deps.scheduler.schedule({
             key: externalAutomationManagerCacheKey(key),
             scopeKey: scope.ownerKey,
-            run: () =>
-              scope.sshTarget
-                ? Promise.reject(new SshHostNotServedError(scope.sshTarget.id))
-                : listLocalManager(scope.provider)
+            run: () => {
+              const current = resolve(request)
+              return current.sshTarget
+                ? listRemoteManager(current.sshTarget, current.provider)
+                : listLocalManager(current.provider)
+            }
           }),
         { refresh: request.refresh }
       )

@@ -7,6 +7,8 @@ import type {
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
 import type { TerminalReplyQueryScanState } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import type { YieldedTerminalQuery } from './terminal-multiplex-yielded-queries'
+import type { TerminalSourceRangeLedger } from '../../terminal-source-range-ledger'
+import type { RemoteTerminalSourceRangeReplacementReservation } from '../../../remote-terminal-source-range-consumer'
 
 export type SnapshotFrameOptions = {
   kind: 'scrollback' | 'resized'
@@ -65,6 +67,11 @@ export type TerminalMultiplexStream = {
   client: TerminalViewportClient | undefined
   isMobile: boolean
   ackOutput: boolean
+  ackOutputSourceRanges: boolean
+  streamGeneration: string
+  sourceRangeLedger: TerminalSourceRangeLedger | null
+  sourceRangeConsumerAttached: boolean
+  sourceRangeReplacement: RemoteTerminalSourceRangeReplacementReservation | null
   ackInFlightBytes: number
   ackWindowBytes: number
   supportsOutputPause: boolean

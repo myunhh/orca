@@ -40,7 +40,7 @@ export function normalizeClaudeStatusRuntimeTarget(
 }
 
 export function getClaudeStatusActiveId(
-  state: ClaudeRateLimitAccountsState,
+  state: Pick<ClaudeRateLimitAccountsState, 'activeAccountId' | 'activeAccountIdsByRuntime'>,
   target: CodexStatusRuntimeTarget
 ): string | null {
   const selection = state.activeAccountIdsByRuntime

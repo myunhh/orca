@@ -1,12 +1,13 @@
 import type { AppState } from '../types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import { getFolderWorkspaceConnectionId } from '@/lib/workspace/ownership/folder-workspace-connection'
-import { getIndexedRepoMap } from '../repos/repository-catalog-index'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
+import { getSshTargetIdForExecutionHost } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getIndexedWorktreeMap } from '../slices/worktrees/listing/worktree-catalog-index'
 import {
   selectFolderWorkspaces,
@@ -74,34 +75,21 @@ export function worktreeUsesRemoteConnection(
   state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
   worktreeId: string
 ): boolean {
-  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
-  if (parsedWorkspaceKey?.type === 'folder') {
-    return Boolean(getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId))
-  }
-  const repoMap = getIndexedRepoMap(state.repos)
-  const directRepo = repoMap.get(getRepoIdFromWorktreeId(worktreeId))
-  if (directRepo) {
-    return Boolean(directRepo.connectionId)
-  }
-  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)
-  const repo = worktree ? repoMap.get(worktree.repoId) : null
-  return Boolean(repo?.connectionId)
+  return getRemoteConnectionIdForWorktree(state, worktreeId) !== null
 }
 
 export function getRemoteConnectionIdForWorktree(
   state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
   worktreeId: string
 ): string | null {
-  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
-  if (parsedWorkspaceKey?.type === 'folder') {
-    return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId) ?? null
+  const resolvedHost = getResolvedExecutionHostIdForWorktree(state, worktreeId)
+  if (resolvedHost) {
+    return getSshTargetIdForExecutionHost(resolvedHost)
   }
-  const repoMap = getIndexedRepoMap(state.repos)
-  const directRepo = repoMap.get(getRepoIdFromWorktreeId(worktreeId))
-  if (directRepo) {
-    return directRepo.connectionId?.trim() || null
-  }
-  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)
-  const repo = worktree ? repoMap.get(worktree.repoId) : null
-  return repo?.connectionId?.trim() || null
+  // Before listings hydrate, only a unique persisted owner can route a saved SSH terminal.
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const hosts = new Set(
+    state.repos.filter((repo) => repo.id === repoId).map(getRepoExecutionHostId)
+  )
+  return hosts.size === 1 ? getSshTargetIdForExecutionHost([...hosts][0]) : null
 }

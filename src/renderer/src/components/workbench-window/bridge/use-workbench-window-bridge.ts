@@ -7,6 +7,9 @@ import { syncZoomCSSVar } from '@/app-shell/chrome/ui-zoom'
 import { buildWorkbenchSnapshots } from './build-workbench-snapshot'
 import { handleWorkbenchCommand } from './workbench-command-handler'
 import { watchDetachedTabActivation } from './detached-tab-activation-guard'
+import { startWorkbenchBrowserPresentationBridge } from './workbench-browser-presentation'
+import { workbenchTabMoveRestriction } from '../workbench-tab-eligibility'
+import { toast } from 'sonner'
 
 // Agent-status bursts would otherwise rebuild every window's snapshot per event.
 const PUBLISH_THROTTLE_MS = 250
@@ -19,6 +22,9 @@ function workbenchInputsChanged(state: AppState, previous: AppState): boolean {
     state.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId ||
     state.ptyIdsByTabId !== previous.ptyIdsByTabId ||
     state.openFiles !== previous.openFiles ||
+    state.browserTabsByWorktree !== previous.browserTabsByWorktree ||
+    state.browserPagesByWorkspace !== previous.browserPagesByWorkspace ||
+    state.remoteBrowserPageHandlesByPageId !== previous.remoteBrowserPageHandlesByPageId ||
     state.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
     state.agentStatusEpoch !== previous.agentStatusEpoch ||
     state.runtimePaneTitlesByTabId !== previous.runtimePaneTitlesByTabId ||
@@ -48,6 +54,15 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
   const publishNow = (): void => {
     timer = null
     lastPublishAt = Date.now()
+    const previous = useAppStore.getState()
+    for (const [tabId, windowId] of Object.entries(previous.detachedWindowIdByTabId)) {
+      const restriction = workbenchTabMoveRestriction(previous, tabId)
+      if (restriction) {
+        previous.returnTabToMainWindow(tabId)
+        void api.publishNotice(windowId, { kind: 'error', message: restriction })
+        toast.error(restriction)
+      }
+    }
     const state = useAppStore.getState()
     const { snapshotsByWindowId, staleTabIds, adoptable } = buildWorkbenchSnapshots(
       state,
@@ -107,6 +122,7 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
     schedule()
   })
   const offCommand = api.onCommand(handleWorkbenchCommand)
+  const offBrowserPresentation = startWorkbenchBrowserPresentationBridge(api)
   const offActivationGuard = watchDetachedTabActivation()
   const offClosed = api.onWindowClosed((windowId) => {
     lastKeyByWindowId.delete(windowId)
@@ -121,6 +137,7 @@ function startWorkbenchWindowBridge(api: WorkbenchWindowsApi): () => void {
     offCommand()
     offActivationGuard()
     offClosed()
+    offBrowserPresentation()
   }
 }
 

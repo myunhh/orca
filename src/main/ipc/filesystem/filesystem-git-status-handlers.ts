@@ -1,21 +1,13 @@
 import { ipcMain } from 'electron'
-import type {
-  GitConflictOperation,
-  GitStagingArea,
-  GitStatusResult
-} from '../../../shared/git/status/git-status-types'
+import type { GitStagingArea, GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusRefBindingRequest as GitStatusUpstreamRefWatchRequest } from '../worktrees/git/worktree-git-status-ref-watch'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 import { getStatus } from '../../git/source-control/status-read'
 import { getSubmoduleStatus } from '../../git/source-control/submodule-status'
-import {
-  abortMerge,
-  abortRebase,
-  detectConflictOperation
-} from '../../git/source-control/git-conflict-operation'
 import { getDiff } from '../../git/source-control/file-diff'
 import { registerFilesystemGitHistoryHandlers } from './filesystem-git-history-handlers'
+import { registerFilesystemGitConflictHandlers } from './filesystem-git-conflict-handlers'
 import { isGitWorktreeMutationInFlight } from '../../git/command-runner/git-worktree-mutation-state'
 import type { GitMutationInFlight } from '../../../shared/git/commands/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../git/source-control/check-ignored-paths'
@@ -35,7 +27,9 @@ import { applyGitStatusUpstreamRefWatchRequest } from '../worktrees/git/git-stat
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
+import { requireSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   assertWslUncPathRunning,
   noteWslDistroWokenForPath,
@@ -46,6 +40,7 @@ import {
 export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerContext): void {
   const { store, gitStatusCancellations } = context
   registerFilesystemGitHistoryHandlers(context)
+  registerFilesystemGitConflictHandlers(context)
   ipcMain.handle(
     'git:status',
     async (
@@ -79,6 +74,12 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         ...(controller ? { signal: controller.signal } : {})
       }
       try {
+        if (args.connectionId) {
+          return await requireSshGitProvider(args.connectionId).getStatus(
+            args.worktreePath,
+            options
+          )
+        }
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
         // The active workspace's first status is a user act: it may start its stopped WSL distro.
         const wakeDistro = args.wakeWslDistro
@@ -119,8 +120,15 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
 
   ipcMain.handle(
     'git:setStatusUpstreamRefWatch',
-    (_event, args: GitStatusUpstreamRefWatchRequest): Promise<void> =>
-      applyGitStatusUpstreamRefWatchRequest(store, args)
+    (event, args: GitStatusUpstreamRefWatchRequest): Promise<void> =>
+      applyGitStatusUpstreamRefWatchRequest(store, args, () => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('worktrees:gitStatusMetadataChanged', {
+            repoId: getRepoIdFromWorktreeId(args.worktreeId),
+            worktreePaths: [args.worktreePath]
+          })
+        }
+      })
   )
 
   // Parent status exposes only gitlinks; read inner changes from each submodule worktree.
@@ -135,6 +143,13 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         area?: GitStagingArea
       }
     ): Promise<GitStatusResult> => {
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).getSubmoduleStatus(
+          args.worktreePath,
+          args.submodulePath,
+          args.area
+        )
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       // Re-read on every status change: a background poll (E9).
       return readWorktreeGitUnlessWslStopped(
@@ -156,6 +171,12 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       _event,
       args: { worktreePath: string; paths: string[]; connectionId?: string }
     ): Promise<string[]> => {
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).checkIgnoredPaths(
+          args.worktreePath,
+          args.paths
+        )
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       return readWorktreeGitUnlessWslStopped(
         store,
@@ -187,32 +208,15 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  // Filesystem probes clear inactive-worktree conflict badges without a full Git status.
-  ipcMain.handle(
-    'git:conflictOperation',
-    async (
-      _event,
-      args: { worktreePath: string; connectionId?: string }
-    ): Promise<GitConflictOperation> => {
-      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      // A 3 s poll for inactive worktrees: its UNC reads would boot a stopped WSL distro (E9).
-      await assertWslUncPathRunning(args.worktreePath)
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
-      return detectConflictOperation(worktreePath, gitOptions)
-    }
-  )
-
   ipcMain.handle(
     'git:mutationInFlight',
     async (
       _event,
       args: { worktreePath: string; connectionId?: string }
     ): Promise<GitMutationInFlight> => {
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).getMutationInFlight(args.worktreePath)
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -221,34 +225,6 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         worktreePath
       )
       return { inFlight: await isGitWorktreeMutationInFlight(worktreePath, gitOptions) }
-    }
-  )
-
-  ipcMain.handle(
-    'git:abortMerge',
-    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
-      await abortMerge(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
-    }
-  )
-
-  ipcMain.handle(
-    'git:abortRebase',
-    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
-      await abortRebase(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
     }
   )
 
@@ -267,6 +243,15 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         wakeWslDistro?: boolean
       }
     ): Promise<GitDiffResult> => {
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).getDiff(
+          args.worktreePath,
+          args.filePath,
+          args.staged,
+          args.compareAgainstHead,
+          args.oldPath
+        )
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       return readWorktreeGitUnlessWslStopped(
         store,

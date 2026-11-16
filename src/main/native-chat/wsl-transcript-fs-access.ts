@@ -10,13 +10,13 @@ import {
   isWslTranscriptFsProcessHandle,
   openWslTranscriptFsProcess,
   readWslTranscriptFsProcess,
-  runWslTranscriptFsProcess,
   type WslTranscriptFsProcessHandle
 } from './wsl-transcript-fs-process-dispatch'
-import type { WslTranscriptFsReusableProcessCall } from './wsl-transcript-fs-process-protocol'
+import { runReusableFsOperation } from './wsl-transcript-reusable-operation'
 import { wslTranscriptFsLaneKey } from './wsl-transcript-fs-route'
 import { admitWslTranscriptPath } from './wsl-transcript-running-admission'
 import {
+  openSshTranscript,
   readSshTranscript,
   statSshTranscript,
   type SshTranscriptHandle
@@ -33,33 +33,6 @@ export type TranscriptFileStats = Pick<Stats, 'size' | 'mtimeMs' | 'ctimeMs' | '
 
 function isSshTranscriptHandle(handle: TranscriptFileHandle): handle is SshTranscriptHandle {
   return 'sshTranscript' in handle
-}
-
-// One request defines both route/dedup identity and child operation, preventing mismatches.
-function runReusableFsOperation<T>(
-  request: WslTranscriptFsReusableProcessCall,
-  priority: WslTranscriptFsTaskPriority,
-  signal: AbortSignal | undefined,
-  localTask: () => Promise<T>
-): Promise<T> {
-  throwIfSignalAborted(signal)
-  const pending = isWslUncPath(request.path)
-    ? admitWslTranscriptPath(request.path).then(() =>
-        runWslTranscriptFsTask(
-          { operation: request.operation, path: request.path, priority, signal },
-          async (taskSignal) => {
-            // Queued work runs later: ask again right before the touch.
-            await waitForPromiseWithSignal(admitWslTranscriptPath(request.path), taskSignal)
-            return runWslTranscriptFsProcess<T>(
-              request,
-              taskSignal,
-              wslTranscriptFsLaneKey(request.path, priority)
-            )
-          }
-        )
-      )
-    : localTask()
-  return waitForPromiseWithSignal(pending, signal)
 }
 
 export function wslGatedAccess(
@@ -129,7 +102,8 @@ export function openTranscriptFile(
 ): Promise<TranscriptFileHandle> {
   const ssh = parseSshTranscriptPath(path)
   if (ssh) {
-    return Promise.resolve({ sshTranscript: ssh })
+    throwIfSignalAborted(signal)
+    return Promise.resolve(openSshTranscript(ssh))
   }
   if (!isWslUncPath(path)) {
     throwIfSignalAborted(signal)
@@ -182,7 +156,10 @@ export function readTranscriptFile(
   signal?: AbortSignal
 ): Promise<{ bytesRead: number; buffer: Buffer }> {
   if (isSshTranscriptHandle(handle)) {
-    return waitForPromiseWithSignal(readSshTranscript(handle), signal)
+    return waitForPromiseWithSignal(
+      readSshTranscript(handle, buffer, offset, length, position, signal),
+      signal
+    )
   }
   // Process handle identity overrides path spelling; never route it into native FileHandle reads.
   if (!isWslUncPath(path) && !isWslTranscriptFsProcessHandle(handle)) {

@@ -1,4 +1,5 @@
 import type { SshConnectionStore } from './ssh-connection-store'
+import type { SshChannelMultiplexer } from '../protocol/ssh-channel-multiplexer'
 import type { SshConnectionManager } from '../connection/ssh-connection-manager'
 import type {
   SshConnectionState,
@@ -70,6 +71,38 @@ export function listRegisteredSshTargets(): SshTarget[] {
 /** Removed-target id → last known label, for ghost-host display on paired clients. */
 export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
   return sshStore?.listRemovedTargetLabels() ?? {}
+}
+
+let registeredGetActiveMultiplexer:
+  | ((connectionId: string) => SshChannelMultiplexer | undefined)
+  | null = null
+
+export function setSshActiveMultiplexerResolver(
+  resolve: ((connectionId: string) => SshChannelMultiplexer | undefined) | null
+): void {
+  registeredGetActiveMultiplexer = resolve
+}
+
+export function getActiveMultiplexer(connectionId: string): SshChannelMultiplexer | undefined {
+  if (!registeredGetActiveMultiplexer) {
+    throw new Error('ssh_active_multiplexer_resolver_not_installed')
+  }
+  return registeredGetActiveMultiplexer(connectionId)
+}
+
+let registeredGetHostHomeDirectory: ((targetId: string) => string | null) | null = null
+
+export function setSshHostHomeDirectoryResolver(
+  resolve: ((targetId: string) => string | null) | null
+): void {
+  registeredGetHostHomeDirectory = resolve
+}
+
+export function getActiveSshHostHomeDirectory(targetId: string): string | null {
+  if (!registeredGetHostHomeDirectory) {
+    throw new Error('ssh_host_home_directory_resolver_not_installed')
+  }
+  return registeredGetHostHomeDirectory(targetId)
 }
 
 type SshTargetMutations = {

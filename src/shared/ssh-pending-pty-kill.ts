@@ -1,4 +1,6 @@
-/** Unconfirmed client-local shutdown, replayed only through the legacy relay bridge for a closed tab’s surviving shell; downgrades replay it too. */
+import type { SshRemotePtyLease } from './ssh-types'
+
+/** An unconfirmed client-local stop, replayed only against the same relay PTY incarnation. */
 export type SshPendingPtyKill = {
   requestedAt: number
   /** Fence the intended incarnation: legacy pty-N IDs recycle after relay restart (#16970).
@@ -39,4 +41,76 @@ export function normalizeSshPendingPtyKill(
     return null
   }
   return { requestedAt: raw.requestedAt, incarnationId: raw.incarnationId, attempts }
+}
+
+export const SSH_PENDING_PTY_KILL_TTL_MS = 30 * 24 * 60 * 60 * 1000
+export const MAX_SSH_PENDING_PTY_KILLS_PER_TARGET = 200
+
+export function isSshPendingPtyKillExpired(intent: SshPendingPtyKill, now: number): boolean {
+  return now - intent.requestedAt > SSH_PENDING_PTY_KILL_TTL_MS
+}
+
+/** Only a successful host inventory supplies an observation; transport failure means defer. */
+export type SshPendingPtyKillObservation = {
+  hostListsPty: boolean
+  hostIncarnationId: string | undefined
+}
+
+export type SshPendingPtyKillRetirement =
+  | 'host-reports-absent'
+  | 'relay-id-recycled'
+  | 'stop-confirmed'
+
+export type SshPendingPtyKillDecision =
+  | { action: 'replay' }
+  | { action: 'retire'; reason: Exclude<SshPendingPtyKillRetirement, 'stop-confirmed'> }
+  | { action: 'defer'; reason: string }
+
+export function decideSshPendingPtyKill(
+  intent: SshPendingPtyKill,
+  observation: SshPendingPtyKillObservation,
+  now: number
+): SshPendingPtyKillDecision {
+  if (isSshPendingPtyKillExpired(intent, now)) {
+    return { action: 'defer', reason: 'order is past its TTL and awaiting prune' }
+  }
+  if (!observation.hostListsPty) {
+    return { action: 'retire', reason: 'host-reports-absent' }
+  }
+  if (intent.incarnationId === undefined) {
+    // Admission permits an omitted incarnation only for an epoch-scoped, non-recyclable ID.
+    return { action: 'replay' }
+  }
+  if (observation.hostIncarnationId === undefined) {
+    return { action: 'defer', reason: 'host published no PTY incarnation for this id' }
+  }
+  if (observation.hostIncarnationId !== intent.incarnationId) {
+    return { action: 'retire', reason: 'relay-id-recycled' }
+  }
+  return { action: 'replay' }
+}
+
+export type SshPendingPtyKillEntry = { ptyId: string; intent: SshPendingPtyKill }
+
+export function prunePendingSshPtyKills(
+  entries: readonly SshPendingPtyKillEntry[],
+  now: number
+): SshPendingPtyKillEntry[] {
+  return entries
+    .filter((entry) => !isSshPendingPtyKillExpired(entry.intent, now))
+    .sort((a, b) => b.intent.requestedAt - a.intent.requestedAt)
+    .slice(0, MAX_SSH_PENDING_PTY_KILLS_PER_TARGET)
+}
+
+/** A closed tab's routing tombstone can still carry an unconfirmed remote stop. */
+export function pendingSshPtyKillEntries(
+  leases: readonly SshRemotePtyLease[]
+): SshPendingPtyKillEntry[] {
+  const entries: SshPendingPtyKillEntry[] = []
+  for (const lease of leases) {
+    if (lease.pendingKill) {
+      entries.push({ ptyId: lease.ptyId, intent: lease.pendingKill })
+    }
+  }
+  return entries
 }

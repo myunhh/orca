@@ -63,13 +63,14 @@ function overrideExecutableToken(
 function overrideProbeCommands(
   commands: readonly TuiAgentDetectionCommand[],
   overrides: InstalledAgentDetectionOptions['agentCmdOverrides'],
-  runtime: TuiAgentDetectionRuntime
+  runtime: TuiAgentDetectionRuntime,
+  expandLocalHome: boolean
 ): Map<TuiAgent, OverrideProbe> {
   const probes = new Map<TuiAgent, OverrideProbe>()
   if (!overrides) {
     return probes
   }
-  const platform = runtime === 'wsl' ? 'linux' : process.platform
+  const platform = runtime === 'wsl' ? 'linux' : runtime
   const supported = commands.filter((command) => !isDetectionUnsupportedInRuntime(command, runtime))
   for (const id of new Set(supported.map((command) => command.id))) {
     const token = overrideExecutableToken(overrides[id], platform)
@@ -78,7 +79,7 @@ function overrideProbeCommands(
     }
     // The terminal shell expands `~`; the WSL probe runs unexpanded, so only expand on this machine.
     const command =
-      runtime !== 'wsl' &&
+      expandLocalHome &&
       (token.startsWith('~/') || (platform === 'win32' && token.startsWith('~\\')))
         ? path.join(homedir(), token.slice(2))
         : token
@@ -98,16 +99,40 @@ export async function detectInstalledAgents(
   options?: InstalledAgentDetectionOptions
 ): Promise<string[]> {
   const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
+  return detectAgentsUsingCommandProbe({
+    runtime,
+    options,
+    expandLocalHome: runtime !== 'wsl',
+    detectCommands: (commands) => detectAgentCommandsOnHost(commands, { context })
+  })
+}
+
+export async function detectAgentsUsingCommandProbe({
+  runtime,
+  options,
+  expandLocalHome,
+  detectCommands
+}: {
+  runtime: TuiAgentDetectionRuntime
+  options?: InstalledAgentDetectionOptions
+  expandLocalHome: boolean
+  detectCommands: (commands: readonly string[]) => Promise<Set<string>>
+}): Promise<string[]> {
   const commands = activeDetectionCommands(options)
   // Why: a CLI outside PATH (e.g. agy in a custom install dir) is reachable only through its override.
-  const overrides = overrideProbeCommands(commands, options?.agentCmdOverrides, runtime)
+  const overrides = overrideProbeCommands(
+    commands,
+    options?.agentCmdOverrides,
+    runtime,
+    expandLocalHome
+  )
   const probeCommands = [
     ...new Set([
       ...getTuiAgentDetectionProbeCommands(commands, runtime),
       ...[...overrides.values()].map((probe) => probe.command)
     ])
   ]
-  const found = await detectAgentCommandsOnHost(probeCommands, { context })
+  const found = await detectCommands(probeCommands)
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
   for (const [id, probe] of overrides) {
     if (

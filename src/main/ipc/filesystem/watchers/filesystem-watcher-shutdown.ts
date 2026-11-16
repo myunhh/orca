@@ -2,8 +2,10 @@ import { disposeWatcherProcess } from '../watcher-process/parcel-watcher-process
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { trackDetachedLocalUnsubscribe } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
+import { closeSshFilesystemWatchers } from './filesystem-watcher-ssh'
 
 export async function closeAllWatchers(): Promise<void> {
+  closeSshFilesystemWatchers()
   for (const lifetime of watcherLifecycleState.senderLifetimes.values()) {
     lifetime.dispose()
   }

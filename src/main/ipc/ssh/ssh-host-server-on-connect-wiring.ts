@@ -4,6 +4,7 @@ import {
   managedOrcadServerName
 } from '../../../shared/managed-orcad-ssh-owner'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { findOrcadMigrationSourceCutoverForTarget } from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { abandonOrcadConversion } from '../../managed-server/migration/cutover/orcad-conversion-abandon'
 import { retainOrcadMigrationSource } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
@@ -54,7 +55,18 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
     // A fence alone may be unfinished setup; only registered servers count.
     managedEnvironmentId: (target) => {
       const environmentId = getManagedOrcadFenceEnvironmentId(target)
-      return environmentId && isRegistered(environmentId) ? environmentId : null
+      if (environmentId && isRegistered(environmentId)) {
+        return environmentId
+      }
+      return (
+        listEnvironments(userDataPath).find((environment) => {
+          const deployment = getOrcadSshDeployment(environment)
+          return (
+            deployment?.sshTargetId === target.id &&
+            deployment.sshTargetGeneration === target.generation
+          )
+        })?.id ?? null
+      )
     },
     ensureTunnel: async (environmentId) => {
       await ensureOrcadManagedTunnel(userDataPath, environmentId)

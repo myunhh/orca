@@ -24,6 +24,10 @@ import {
   forgetLegacyRelayTarget,
   stopLegacyRelayBridge
 } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
+import { activeSessions } from './ssh-active-relay-sessions'
+import { clearRelayLostBackoff } from './ssh-relay-lost-backoff'
+import { clearRelayStateOverride } from './ssh-renderer-broadcast'
+import { forgetRelayTransportState } from './ssh-relay-transport-state'
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   invalidateConnectAttempt(targetId)
@@ -85,11 +89,17 @@ function dropRemovedSshTargetDisplayLabel(targetId: string): void {
 }
 
 export async function teardownSshTargetTransport(targetId: string): Promise<void> {
+  const session = activeSessions.get(targetId)
+  activeSessions.delete(targetId)
+  clearRelayLostBackoff(targetId)
+  clearRelayStateOverride(targetId)
+  forgetRelayTransportState(targetId)
   // COMPAT(legacy-relay-bridge): hangs up only this client; the relays keep their terminals.
   stopLegacyRelayBridge(targetId)
   forgetPortForwardRestoreState(targetId)
   // Release listeners before reconnect; independent system-SSH tunnels also retain ports after session disconnect.
-  const [forwards, managedTunnels, disconnect] = await Promise.allSettled([
+  const [relay, forwards, managedTunnels, disconnect] = await Promise.allSettled([
+    session?.detachAndPersist(),
     portForwardManager?.removeAllForwards(targetId),
     // Import lazily: SSH-only callers may lack the app paths resolved by managed tunnels.
     import('../../managed-server/lifecycle/orcad-managed-tunnel').then((tunnels) =>
@@ -97,6 +107,9 @@ export async function teardownSshTargetTransport(targetId: string): Promise<void
     ),
     (async () => connectionManager?.disconnect(targetId))()
   ])
+  if (relay.status === 'rejected') {
+    throw relay.reason
+  }
   if (forwards.status === 'rejected') {
     throw forwards.reason
   }

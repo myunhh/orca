@@ -24,7 +24,7 @@ import { attributedSparsePresetId } from '../../../ipc/sparse-preset-attribution
 import type { WorktreeCreateTimingRecorder } from '../../../workspaces/creation/worktree-create-timing'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 
-export async function materializeRuntimeLocalWorktree<T>(args: {
+type RuntimeWorktreeMetadataArgs<T> = {
   request: RuntimeManagedWorktreeCreateArgs
   repo: Repo
   store: RuntimeStore
@@ -41,10 +41,12 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   displayNameKind: CreateWorktreeArgs['displayNameKind']
   effectiveSanitizedName: string
   effectiveCreatedWithAgent?: TuiAgent
-  localWorktreeGitOptions: LocalGitExecOptions
+  creationSource?: 'runtime' | 'ssh'
   onMetadataPersisted: (worktree: Worktree) => T
   timing: WorktreeCreateTimingRecorder
-}): Promise<{ worktree: Worktree; metadataResult: T; includeCopyWarning?: string }> {
+}
+
+export function persistRuntimeCreatedWorktree<T>(args: RuntimeWorktreeMetadataArgs<T>) {
   const {
     request,
     repo,
@@ -62,7 +64,6 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     displayNameKind,
     effectiveSanitizedName,
     effectiveCreatedWithAgent,
-    localWorktreeGitOptions,
     timing
   } = args
   const worktreeId = `${repo.id}::${created.path}`
@@ -81,7 +82,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
       lastActivityAt: now,
       createdAt: now,
       orcaCreatedAt: now,
-      orcaCreationSource: 'runtime',
+      orcaCreationSource: args.creationSource ?? 'runtime',
       orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
       ...displayNameMeta,
       baseRef: metadataBaseRef,
@@ -147,6 +148,14 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     hostId: meta.hostId ?? getRepoExecutionHostId(repo)
   }
   const metadataResult = args.onMetadataPersisted(worktree)
+  return { worktree, metadataResult }
+}
+
+export async function materializeRuntimeLocalWorktree<T>(
+  args: RuntimeWorktreeMetadataArgs<T> & { localWorktreeGitOptions: LocalGitExecOptions }
+): Promise<{ worktree: Worktree; metadataResult: T; includeCopyWarning?: string }> {
+  const { repo, created, localWorktreeGitOptions, timing } = args
+  const { worktree, metadataResult } = persistRuntimeCreatedWorktree(args)
 
   if ((repo.symlinkPaths ?? []).length > 0) {
     await timing.time('create_symlinks', () =>

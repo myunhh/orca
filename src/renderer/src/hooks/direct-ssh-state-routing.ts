@@ -10,7 +10,8 @@ export function directSshAuthorityFromConnectionState(
     state.targetId !== targetId ||
     state.status !== 'connected' ||
     !state.providerEpoch ||
-    state.connectionGeneration === undefined
+    state.connectionGeneration === undefined ||
+    state.managedServer?.kind === 'managed'
   ) {
     return null
   }
@@ -18,5 +19,26 @@ export function directSshAuthorityFromConnectionState(
     targetId,
     providerEpoch: state.providerEpoch,
     connectionGeneration: state.connectionGeneration
+  }
+}
+
+export function registerDirectSshWakeRouting(deps: {
+  getConnectionStates: () => Iterable<readonly [string, SshConnectionState]>
+  wakeAuthority: (authority: DirectSshAuthority) => void
+  onSystemResumed?: (callback: () => void) => () => void
+}): () => void {
+  const wake = (): void => {
+    for (const [targetId, state] of deps.getConnectionStates()) {
+      const authority = directSshAuthorityFromConnectionState(targetId, state)
+      if (authority) {
+        deps.wakeAuthority(authority)
+      }
+    }
+  }
+  window.addEventListener('online', wake)
+  const unsubscribeSystemResumed = deps.onSystemResumed?.(wake)
+  return () => {
+    window.removeEventListener('online', wake)
+    unsubscribeSystemResumed?.()
   }
 }

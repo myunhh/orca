@@ -169,13 +169,15 @@ export function readCodexRateLimitsViaRpc(
     }
 
     function onClose(code: number | null, signal: NodeJS.Signals | null): void {
+      const failureKind = classifyCodexRpcErrorFailureKind(stderr)
       settle({
         provider: 'codex',
         session: null,
         weekly: null,
         updatedAt: Date.now(),
         error: describeCodexRpcExit(code, signal, stderr),
-        status: 'error'
+        status: 'error',
+        ...(failureKind ? { usageMetadata: { failureKind } } : {})
       })
     }
 
@@ -254,7 +256,7 @@ function describeCodexRpcExit(
   signal: NodeJS.Signals | null,
   stderr: string
 ): string {
-  if (extractCodexAuthError(stderr)) {
+  if (classifyCodexRpcErrorFailureKind(stderr) !== 'network' && extractCodexAuthError(stderr)) {
     // Fixed copy cannot leak paths/tokens and is exactly what the renderer classifies.
     return 'Your ChatGPT session could not be refreshed. Please sign in again.'
   }

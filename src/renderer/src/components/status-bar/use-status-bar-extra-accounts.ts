@@ -2,7 +2,9 @@ import { useEffect, useMemo } from 'react'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useAppStore } from '../../store'
 import type { InactiveAccountUsage, ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import { hasUsageData } from '../../../../shared/usage-provider-windows'
+import { createPendingProviderSnapshot } from './status-bar-provider-visibility'
+import { getClaudeStatusActiveId } from './status-bar-claude-accounts'
+import { getCodexStatusActiveId } from './status-bar-codex-accounts'
 
 // Main debounces inactive fetches to 60s; this keeps the extra chips fresh without the menu open.
 const EXTRA_ACCOUNT_REFRESH_MS = 5 * 60_000
@@ -31,16 +33,19 @@ function accountLabel(email: string): string {
 }
 
 function buildProviderAccounts(
+  provider: 'claude' | 'codex',
   inactive: readonly InactiveAccountUsage[],
   accounts: readonly AccountIdentity[] | undefined,
   activeId: string | null | undefined
 ): StatusBarProviderAccounts | undefined {
   const extras: StatusBarExtraAccount[] = []
   for (const account of accounts ?? []) {
-    const usage = inactive.find((entry) => entry.accountId === account.id)?.rateLimits
-    if (!usage || !hasUsageData(usage)) {
+    if (account.id === activeId) {
       continue
     }
+    const usage =
+      inactive.find((entry) => entry.accountId === account.id)?.rateLimits ??
+      createPendingProviderSnapshot(provider)
     extras.push({
       accountId: account.id,
       email: account.email,
@@ -66,17 +71,23 @@ export function useStatusBarExtraAccounts(): StatusBarExtraAccounts {
   const inactiveCodex = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const claudeAccounts = useAppStore((s) => s.settings?.claudeManagedAccounts)
   const codexAccounts = useAppStore((s) => s.settings?.codexManagedAccounts)
-  const activeClaudeId = useAppStore(
-    (s) =>
-      (s.settings?.activeClaudeManagedAccountIdsByRuntime
-        ? s.settings.activeClaudeManagedAccountIdsByRuntime.host
-        : s.settings?.activeClaudeManagedAccountId) ?? null
+  const activeClaudeId = useAppStore((s) =>
+    getClaudeStatusActiveId(
+      {
+        activeAccountId: s.settings?.activeClaudeManagedAccountId ?? null,
+        activeAccountIdsByRuntime: s.settings?.activeClaudeManagedAccountIdsByRuntime
+      },
+      s.rateLimits.claudeTarget
+    )
   )
-  const activeCodexId = useAppStore(
-    (s) =>
-      (s.settings?.activeCodexManagedAccountIdsByRuntime
-        ? s.settings.activeCodexManagedAccountIdsByRuntime.host
-        : s.settings?.activeCodexManagedAccountId) ?? null
+  const activeCodexId = useAppStore((s) =>
+    getCodexStatusActiveId(
+      {
+        activeAccountId: s.settings?.activeCodexManagedAccountId ?? null,
+        activeAccountIdsByRuntime: s.settings?.activeCodexManagedAccountIdsByRuntime
+      },
+      s.rateLimits.codexTarget
+    )
   )
   const fetchInactiveClaude = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const fetchInactiveCodex = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
@@ -99,15 +110,24 @@ export function useStatusBarExtraAccounts(): StatusBarExtraAccounts {
       run: fetchAll,
       intervalMs: EXTRA_ACCOUNT_REFRESH_MS
     })
-  }, [wantClaude, wantCodex, fetchInactiveClaude, fetchInactiveCodex])
+  }, [
+    wantClaude,
+    wantCodex,
+    fetchInactiveClaude,
+    fetchInactiveCodex,
+    claudeAccounts,
+    codexAccounts,
+    activeClaudeId,
+    activeCodexId
+  ])
 
   return useMemo(
     () => ({
       claude: wantClaude
-        ? buildProviderAccounts(inactiveClaude, claudeAccounts, activeClaudeId)
+        ? buildProviderAccounts('claude', inactiveClaude, claudeAccounts, activeClaudeId)
         : undefined,
       codex: wantCodex
-        ? buildProviderAccounts(inactiveCodex, codexAccounts, activeCodexId)
+        ? buildProviderAccounts('codex', inactiveCodex, codexAccounts, activeCodexId)
         : undefined
     }),
     [

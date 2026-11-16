@@ -20,6 +20,7 @@ import {
   discardPendingMultiplexOutput,
   replaySnapshotCoveredStatelessQueries
 } from './terminal-multiplex-yielded-queries'
+import { prepareTerminalSourceRangeSnapshot } from './terminal-source-range-snapshot'
 
 export type MultiplexPublishedInitialState = {
   isMobile: boolean
@@ -89,46 +90,59 @@ export async function publishMultiplexInitialSnapshot(
     rows: serialized?.rows ?? size?.rows,
     displayMode,
     seq: layoutSeq,
-    ...((stream.supportsOutputPause ||
+    ...((stream.ackOutputSourceRanges ||
+      stream.supportsOutputPause ||
       stream.inputSessionId !== null ||
       stream.supportsOutputCadence) && {
       capabilities: {
+        ...(stream.ackOutputSourceRanges ? { ackOutputSourceRanges: 1 as const } : {}),
         ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
         ...(stream.supportsOutputPauseDropNotice ? { outputPauseDropNotice: 1 as const } : {}),
         ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {}),
         ...(stream.supportsOutputCadence ? { outputCadence: 1 as const } : {})
       }
     }),
+    ...(stream.ackOutputSourceRanges ? { streamGeneration: stream.streamGeneration } : {}),
     ...(stream.inputSessionId !== null
       ? { inputLedgerId: getTerminalInputSequenceLedger(runtime).id }
       : {}),
     // Truncated retained history does not invalidate the authoritative latest-screen fallback.
     truncated: initialOutputOverflowed
   })
-  sendSnapshotFrames((opcode, payload) => state.sendFrame(request.streamId, opcode, payload), {
-    kind: 'scrollback',
-    cols: serialized?.cols ?? size?.cols ?? 80,
-    rows: serialized?.rows ?? size?.rows ?? 24,
-    displayMode,
-    seq: snapshotOutputSeq,
-    cwd: serialized?.cwd,
-    truncated: initialOutputOverflowed,
-    truncatedByByteBudget: serialized?.truncatedByByteBudget,
-    scrollbackRows: serialized?.scrollbackRows,
-    source: serialized?.source,
-    kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
-    alternateScreen: serialized?.alternateScreen,
-    terminalOwner: serialized?.terminalOwner,
-    lastTitle: serialized?.lastTitle,
-    oscLinks: serialized?.oscLinks,
-    pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
-    // E2E: a forced-unavailable host retains nothing, so it has no tail to fall back on either.
-    data:
-      serialized?.data ??
-      (read.tail.length > 0 && !isTerminalSnapshotForcedUnavailable()
-        ? `${read.tail.join('\r\n')}\r\n`
-        : '')
-  })
+  const sourceReplacement = prepareTerminalSourceRangeSnapshot(
+    state,
+    stream,
+    serialized,
+    'initial-snapshot'
+  )
+  const publication = sendSnapshotFrames(
+    (opcode, payload) => state.sendFrame(request.streamId, opcode, payload),
+    {
+      kind: 'scrollback',
+      cols: serialized?.cols ?? size?.cols ?? 80,
+      rows: serialized?.rows ?? size?.rows ?? 24,
+      displayMode,
+      seq: snapshotOutputSeq,
+      cwd: serialized?.cwd,
+      truncated: initialOutputOverflowed,
+      truncatedByByteBudget: serialized?.truncatedByByteBudget,
+      scrollbackRows: serialized?.scrollbackRows,
+      source: serialized?.source,
+      kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
+      alternateScreen: serialized?.alternateScreen,
+      terminalOwner: serialized?.terminalOwner,
+      lastTitle: serialized?.lastTitle,
+      oscLinks: serialized?.oscLinks,
+      pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
+      // E2E: a forced-unavailable host retains nothing, so it has no tail to fall back on either.
+      data:
+        serialized?.data ??
+        (read.tail.length > 0 && !isTerminalSnapshotForcedUnavailable()
+          ? `${read.tail.join('\r\n')}\r\n`
+          : '')
+    }
+  )
+  sourceReplacement?.commit(publication.published)
   // Seed resize re-stream columns from the initial snapshot the client already rewrapped.
   stream.lastResizeCols = serialized?.cols ?? size?.cols
   stream.buffering = false

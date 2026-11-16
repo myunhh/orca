@@ -24,6 +24,7 @@ import {
   blockedWslDistroForPath,
   wslDistroForPath
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
+import { getSshGitProvider } from '../../../providers/ssh-git-dispatch'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
 
@@ -171,11 +172,11 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
         getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
       )
     }
-    // Why: this process serves no SSH git, so an SSH repo answers from its stored rows.
-    return {
-      ok: false,
-      worktrees: this.listStoredWorktreesForResolution(repo)
+    const provider = getSshGitProvider(sshConnectionId)
+    if (!provider) {
+      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
+    return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
   }
 
   protected listStoredWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {

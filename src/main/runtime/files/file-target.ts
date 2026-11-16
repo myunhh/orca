@@ -15,6 +15,8 @@ import type {
   LocalFilesystemProviderOptions
 } from '../../providers/local-filesystem-provider'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
+import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
+import type { IFilesystemProvider } from '../../providers/filesystem-provider-contract'
 
 export type ResolvedRuntimeFileWorktree = Worktree & { git: GitWorktreeInfo }
 
@@ -34,7 +36,7 @@ export type RuntimeFileExplorerPath = {
  * its nested SSH id is scoped by environment and must never enter this client's SSH namespace. */
 export type RuntimeFileRoute =
   | { kind: 'local'; createProvider: typeof createLocalFilesystemProvider }
-  /** Unsupported SSH routes must fail/degrade to empty, never read locally. */
+  /** SSH routes require their registered relay provider and never fall back locally. */
   | { kind: 'ssh'; connectionId: string }
 
 export function runtimeFileRouteForTarget(target: {
@@ -66,8 +68,12 @@ export function requireLocalRuntimeFileRoute(target: {
 export function requireRuntimeFileProvider(
   target: { executionHostId: ExecutionHostId },
   host: RuntimeLocalFileHost
-): LocalFilesystemProvider {
-  return requireLocalRuntimeFileRoute(target).createProvider({
+): LocalFilesystemProvider | IFilesystemProvider {
+  const route = runtimeFileRouteForTarget(target)
+  if (route.kind === 'ssh') {
+    return requireSshFilesystemProvider(route.connectionId)
+  }
+  return route.createProvider({
     requireStore: () => host.requireStore(),
     resolveAuthorizedPath: resolveRuntimeAuthorizedPath
   })

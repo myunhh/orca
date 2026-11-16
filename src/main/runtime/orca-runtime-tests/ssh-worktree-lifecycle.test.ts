@@ -1,6 +1,13 @@
-import '../../git/command-runner/git-exec-file'
+import type * as Filesystem from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof Filesystem>()
+  return { ...actual, mkdir: vi.fn(actual.mkdir) }
+})
+
 import './runtime-test-module-registration.spec'
+import './orca-runtime-test-lifecycle.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import {
@@ -9,7 +16,6 @@ import {
 } from '../orca-runtime-test-mocks/setup.spec'
 import '../../git/refs/resolution/repo-branch-conflict'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
@@ -22,7 +28,7 @@ import {
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
-  it('refuses an SSH-backed create for mobile/runtime callers instead of creating locally', async () => {
+  it('refuses a disconnected SSH create without falling back to local Git', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
     const remoteStore = {
@@ -42,7 +48,7 @@ describe('OrcaRuntimeService', () => {
 
     await expect(
       runtime.createManagedWorktree({ repoSelector: TEST_REPO_ID, name: 'mobile-feature' })
-    ).rejects.toThrow(SshHostNotServedError)
+    ).rejects.toThrow('Remote connection dropped.')
 
     expect(addWorktree).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()

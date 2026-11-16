@@ -62,9 +62,13 @@ export function sendModelRestoreNeededMarker(
 export function sendPtyDataToRenderer(
   session: PtyIpcSession,
   id: string,
-  payload: PtyDataPayload
+  payload: PtyDataPayload,
+  projectionAdmissionIds?: readonly string[]
 ): boolean {
   if (!session.mainWindow) {
+    if (projectionAdmissionIds) {
+      session.sshOutputIntake?.transferProjections(projectionAdmissionIds, 'renderer-destroyed')
+    }
     return false
   }
   const charCount = getPtyPayloadCharCount(payload)
@@ -101,12 +105,40 @@ export function sendPtyDataToRenderer(
       }
     }
     session.rendererDeliveryRestoreNeededPtys.add(id)
+    if (projectionAdmissionIds) {
+      session.sshOutputIntake?.transferProjections(projectionAdmissionIds, 'renderer-send-failed')
+    }
     mainDeliveryBreadcrumbs.record('pty-data-send-failed', {
       id: redactPtyIdForDiagnostics(id),
       chars: charCount
     })
     console.error('[pty] renderer data send failed; payload will not be retried', error)
     return false
+  }
+  if (projectionAdmissionIds) {
+    try {
+      session.sshOutputIntake?.publishProjectionPrefix(
+        projectionAdmissionIds,
+        payload.data.length,
+        charCount
+      )
+      if (projectionAdmissionIds.length > 0 && charCount > 0 && session.sshOutputIntake) {
+        const current = session.rendererDeliveryAccountingByPty.get(id)
+        if (current) {
+          const ranges = (current.projectionAccountingRanges ??= [])
+          ranges.push({
+            start: current.sentChars - charCount,
+            end: current.sentChars,
+            projectionAdmissionIds
+          })
+        }
+      }
+    } catch {
+      session.sshOutputIntake?.transferProjections(
+        projectionAdmissionIds,
+        'projection-publish-failed'
+      )
+    }
   }
   if (
     session.rendererDeliveryRestoreNeededPtys.has(id) &&

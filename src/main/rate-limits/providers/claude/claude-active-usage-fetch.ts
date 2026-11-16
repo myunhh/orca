@@ -26,9 +26,8 @@ export async function fetchActiveClaudeRateLimits(
   if (options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
-  const credentials = await readClaudeOAuthCredentials(
-    resolveClaudeOAuthCredentialReadOptions(options?.authPreparation)
-  )
+  const credentialReadOptions = resolveClaudeOAuthCredentialReadOptions(options?.authPreparation)
+  let credentials = await readClaudeOAuthCredentials(credentialReadOptions)
   const metadata = {
     credentialSource: credentials.source,
     authProvenance: options?.authPreparation?.provenance ?? 'system'
@@ -47,21 +46,45 @@ export async function fetchActiveClaudeRateLimits(
     })
   }
   if (!credentials.token) {
+    const renewable = canClaudeRenewLogin(credentials)
     return makeClaudeUsageResult(
       'error',
       credentials.unavailable
         ? 'Claude usage is unavailable.'
-        : 'Sign in again to use this account.',
+        : renewable
+          ? 'Claude usage updates the next time Claude runs.'
+          : 'Sign in again to use this account.',
       {
         ...metadata,
-        failureKind: credentials.unavailable ? 'keychain-unavailable' : 'missing-credentials',
+        failureKind: credentials.unavailable
+          ? 'keychain-unavailable'
+          : renewable
+            ? 'stale-token'
+            : 'missing-credentials',
         attemptedSources: []
       }
     )
   }
   try {
     return await fetchClaudeOAuthUsage(credentials.token, options?.signal)
-  } catch (error) {
+  } catch (initialError) {
+    let error = initialError
+    if (classifyClaudeOAuthUsageError(error).failureKind === 'stale-token') {
+      // Claude may have rotated the token while this request was in flight; never rotate it here.
+      const current = await readClaudeOAuthCredentials(credentialReadOptions)
+      if (options?.signal?.aborted) {
+        return abortedClaudeRateLimitResult()
+      }
+      if (current.token && current.token !== credentials.token) {
+        credentials = current
+        metadata.credentialSource = current.source
+        try {
+          return await fetchClaudeOAuthUsage(current.token, options?.signal)
+        } catch (retryError) {
+          error = retryError
+        }
+      }
+    }
     const { failureKind } = classifyClaudeOAuthUsageError(error)
     if (failureKind === 'stale-token' && !canClaudeRenewLogin(credentials, error)) {
       return makeClaudeUsageResult('error', 'Sign in again to use this account.', {
@@ -94,7 +117,7 @@ export async function fetchActiveClaudeRateLimits(
 // Mirrors Claude Code's own refreshability check; anything else needs a new sign-in.
 function canClaudeRenewLogin(
   credentials: ClaudeOAuthCredentialReadResult,
-  error: unknown
+  error?: unknown
 ): boolean {
   const refreshTokenExpiresAt = credentials.refreshTokenExpiresAt
   return (

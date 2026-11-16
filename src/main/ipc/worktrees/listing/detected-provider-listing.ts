@@ -45,6 +45,7 @@ import {
   rescanWorktreesWhenWslDistroRuns,
   wslDistroNotRunningForScanFailure
 } from './wsl-stopped-worktree-listing'
+import { getSshGitProvider } from '../../../providers/ssh-git-dispatch'
 
 // Partial stores (tests, embedders) may not publish workspace metadata; their listings carry no stamp.
 function readWorkspaceMetadataCursor(store: {
@@ -59,7 +60,7 @@ export async function listDetectedWorktreesForCapturedRepo(
   isCurrent: () => boolean,
   providerAbort?: { signal: AbortSignal; status: () => 'canceled' | 'timed-out' }
 ): Promise<DetectedWorktreeListResult | { providerAbortStatus: 'canceled' | 'timed-out' } | null> {
-  // Unserved SSH ownership permits metadata listing only, never local Git.
+  // Disconnected SSH ownership permits metadata listing only, never local Git.
   const connectionId = getRepoDialableSshTargetId(repo)
   const abortedResult = () =>
     providerAbort?.signal.aborted
@@ -101,7 +102,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         )
       }
     }
-    if (connectionId) {
+    if (connectionId && !getSshGitProvider(connectionId)) {
       const aborted = abortedResult()
       if (aborted) {
         return aborted

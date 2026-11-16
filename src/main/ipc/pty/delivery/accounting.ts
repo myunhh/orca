@@ -52,6 +52,14 @@ export function deletePendingPtyData(session: PtyIpcSession, id: string): void {
 }
 
 export function clearPendingPtyData(session: PtyIpcSession): void {
+  for (const pending of session.pendingData.values()) {
+    if (pending.projectionAdmissionIds) {
+      session.sshOutputIntake?.transferProjections(
+        pending.projectionAdmissionIds,
+        'renderer-lifecycle-reset'
+      )
+    }
+  }
   session.pendingData.clear()
 }
 
@@ -88,6 +96,27 @@ export function applyCumulativeAck(
     Math.max(accounting.ackedChars, processedChars)
   )
   const acknowledged = nextAckedChars - accounting.ackedChars
+  const projectionRanges = accounting.projectionAccountingRanges
+  if (acknowledged > 0 && projectionRanges) {
+    let projectionChars = 0
+    let settledRanges = 0
+    for (const range of projectionRanges) {
+      if (range.start >= nextAckedChars) {
+        break
+      }
+      projectionChars += Math.max(
+        0,
+        Math.min(range.end, nextAckedChars) - Math.max(range.start, accounting.ackedChars)
+      )
+      if (range.end <= nextAckedChars) {
+        settledRanges++
+      }
+    }
+    projectionRanges.splice(0, settledRanges)
+    if (projectionChars > 0) {
+      session.sshOutputIntake?.settleProjectionPrefix(id, projectionChars)
+    }
+  }
   accounting.ackedChars = nextAckedChars
   if (acknowledged > 0) {
     accounting.lastAckAtMs = Date.now()
@@ -166,6 +195,8 @@ export function writeOffLostRendererDelivery(
     if (receivedChars > accounting.ackedChars) {
       continue
     }
+    session.sshOutputIntake?.transferPtyProjections(id, 'renderer-delivery-writeoff')
+    delete accounting.projectionAccountingRanges
     const acknowledged = applyCumulativeAck(session, id, accounting.sentChars)
     if (acknowledged <= 0) {
       continue
@@ -175,6 +206,12 @@ export function writeOffLostRendererDelivery(
     const pending = session.pendingData.get(id)
     if (pending) {
       session.pendingDroppedChars += pending.data.length
+      if (pending.projectionAdmissionIds) {
+        session.sshOutputIntake?.transferProjections(
+          pending.projectionAdmissionIds,
+          'renderer-delivery-writeoff'
+        )
+      }
       deletePendingPtyData(session, id)
       session.pendingOverflowMarkedPtys.delete(id)
       session.updateProducerFlowControl(id)

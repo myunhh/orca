@@ -3,13 +3,11 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
-import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
+import { listWorktreesOnRemovalRoute } from '../../../runtime/workspaces/removal/worktree-removal-route-listing'
 import {
-  SshHostNotServedError,
-  SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE
-} from '../../../providers/ssh-host-not-served-error'
-import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
+  resolveWorktreeRemovalHome,
+  resolveWorktreeRemovalRoute
+} from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import {
   getNestedWorktreeRemovalPlan,
   assertNestedWorktreeRemovalApproval,
@@ -29,18 +27,17 @@ export async function previewNestedWorktreeRemoval(
     throw new Error('Nested worktree deletion is only available for Git workspaces.')
   }
   assertRemovalHostMatchesRepoRow(repo, repo.id, hostId)
-  if (repo.connectionId) {
-    throw new SshHostNotServedError(repo.connectionId, SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE)
-  }
-  const worktrees = await listWorktreesStrict(
-    repo.path,
-    getLocalProjectWorktreeGitOptions(context.store, repo)
+  const route = resolveWorktreeRemovalRoute(hostId)
+  const { registeredWorktrees: worktrees } = await listWorktreesOnRemovalRoute(
+    route,
+    repo,
+    context.store
   )
   return getNestedWorktreeRemovalPlan({
     repoPath: repo.path,
     worktreePath,
     worktrees,
-    home: resolveWorktreeRemovalHomeForHost(hostId)
+    home: resolveWorktreeRemovalHome(route)
   })
 }
 

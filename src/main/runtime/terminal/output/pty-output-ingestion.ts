@@ -20,6 +20,7 @@ import {
   tailGainedNewerBlockedReason
 } from '../wait/terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
+import type { TerminalOutputSourceRange } from '../../../../shared/terminal-output-source-range'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   protected abstract recordOsc7MetadataForPty(
@@ -31,14 +32,6 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     data: string
   ): ProcessedAgentStatusChunk
   protected abstract recordRecentPtyOutput(ptyId: string, data: string): void
-  protected abstract shouldAnswerQueriesForLiveChunk(ptyId: string): boolean
-  abstract maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null
-  protected abstract trackHeadlessTerminalData(
-    ptyId: string,
-    data: string,
-    outputSequence: number,
-    forwardQueryReplies?: boolean
-  ): void
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
   protected abstract scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
@@ -83,20 +76,14 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     entry: RuntimePtyTitleTrackerEntry
   ): void
 
-  /** Arrival-order mode scan: the settled tracker plus any in-flight snapshot capture's. */
-  protected scanProviderModeTrackers(ptyId: string, data: string): void {
-    this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
-    for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
-      tracker.scan(data)
-    }
-  }
-
   onPtyData(
     ptyId: string,
     data: string,
     at: number,
     sequenceChars = data.length,
-    transformed = false
+    transformed = false,
+    captureModelReceipt?: (completion: Promise<void>) => void,
+    sourceRanges?: readonly TerminalOutputSourceRange[]
   ): number {
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
@@ -113,7 +100,13 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     // Hydrate before tracking live data: publish the seeded state/chain first or a late seed could overwrite live bytes.
     this.maybeHydrateHeadlessFromRenderer(ptyId)
     // The shared tracker processes every title in byte order, preserving coalesced working-to-idle transitions (#1083).
-    this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryReplies)
+    const modelCompletion = this.trackHeadlessTerminalData(
+      ptyId,
+      data,
+      outputSequence,
+      forwardQueryReplies
+    )
+    captureModelReceipt?.(modelCompletion)
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     const ptyTailBefore = pty
@@ -316,7 +309,8 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       seq: outputSequence,
       rawLength: sequenceChars,
       ...(transformed ? { transformed: true } : {}),
-      ...(cwdChanged && cwd !== null ? { cwd } : {})
+      ...(cwdChanged && cwd !== null ? { cwd } : {}),
+      ...(sourceRanges?.length ? { sourceRanges } : {})
     }))
     return outputSequence
   }

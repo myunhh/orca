@@ -1,3 +1,4 @@
+import { claimSshPaneLease } from './ssh-pane-lease-claim'
 import { readTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   isNativeWindowsLocalPtySpawn,
@@ -90,7 +91,7 @@ export async function completePaneAdoption(
     runtime?.preparePtyExecutionContext?.(result.id, result.wslDistro ?? null, {
       preserveExisting: result.wslDistro === undefined
     })
-    admitPtySpawnOwnership(runtime, result)
+    admitPtySpawnOwnership(runtime, result, args.connectionId)
     if (
       !result.wslDistro &&
       isNativeWindowsLocalPtySpawn({
@@ -165,6 +166,14 @@ export async function completePaneAdoption(
         }
       }
     }
+    claimSshPaneLease({
+      store: args.store,
+      connectionId: args.connectionId,
+      ptyId: result.id,
+      worktreeId: args.worktreeId,
+      tabId: owner.tabId,
+      leafId: owner.leafId
+    })
     runtime?.noteTerminalSpawnCommit?.(result)
     if (!owner.handle && terminalHandle) {
       runtime?.registerPreAllocatedHandleForPty?.(result.id, terminalHandle)

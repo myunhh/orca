@@ -23,6 +23,8 @@ import {
   shouldDropWslMoveProjectUpdate,
   wslMoveProjectRefForWorkspace
 } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { listDesktopLineageForHost } from './host-lineage-listing'
+import type { ListDesktopLineageForHostArgs } from '../../../../shared/host-lineage-contract'
 
 export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime } = context
@@ -93,6 +95,10 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       installationId: await runtime.readStoreInstallationId()
     }
   })
+
+  ipcMain.handle('worktrees:listLineageForHost', (_event, args: ListDesktopLineageForHostArgs) =>
+    listDesktopLineageForHost(store, args)
+  )
 
   ipcMain.handle(
     'worktrees:updateLineage',

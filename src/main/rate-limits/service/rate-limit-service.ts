@@ -103,12 +103,16 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
     this.networkProxySettingsResolver = resolver
   }
 
-  setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccount[]): void {
+  setInactiveClaudeAccountsResolver(
+    resolver: (target: ClaudeAccountSelectionTarget) => InactiveClaudeAccount[]
+  ): void {
     this.inactiveClaudeAccountsResolver = resolver
     this.inactiveClaudeAccountsGeneration += 1
   }
 
-  setInactiveCodexAccountsResolver(resolver: () => InactiveCodexAccountInfo[]): void {
+  setInactiveCodexAccountsResolver(
+    resolver: (target: CodexAccountSelectionTarget) => InactiveCodexAccountInfo[]
+  ): void {
     this.inactiveCodexAccountsResolver = resolver
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()

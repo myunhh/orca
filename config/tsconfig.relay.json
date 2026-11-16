@@ -1,0 +1,10 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": ["../src/relay/**/*.ts", "../src/types/**/*.d.ts"],
+  "exclude": ["../src/relay/**/*.test.ts"],
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "types": ["node"]
+  }
+}

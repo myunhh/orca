@@ -47,7 +47,7 @@ export function assertWorkspaceAcceptsNewPty(
   connectionId?: string | null
 ): Promise<void> | void {
   const fencedByCwd = !!cwd && isWslMoveCwdFenced(cwd)
-  if (fencedByCwd || isWslMoveWorkspaceBlocked(store, worktreeId)) {
+  if (!connectionId && (fencedByCwd || isWslMoveWorkspaceBlocked(store, worktreeId))) {
     return assertReattachesLiveSession(sessionId, worktreeId).then(() =>
       assertFolderWorkspacePtyPathUsable(store, worktreeId, passiveWslRestore, connectionId)
     )

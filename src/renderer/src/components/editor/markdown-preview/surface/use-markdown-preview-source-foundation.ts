@@ -1,5 +1,5 @@
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createConnectionIdForFileSelector } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { computeEditorFontSize } from '../../../../../../shared/editor/editor-font-zoom'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
@@ -18,6 +18,7 @@ import {
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from '../../usePreserveSectionDuringExternalEdit'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { LocalImageSourceContext } from '../../document-images/useLocalImageSrc'
 
 export function useMarkdownPreviewSourceFoundation({
   content,
@@ -34,6 +35,7 @@ export function useMarkdownPreviewSourceFoundation({
   prewarmImages?: boolean
   sourceRuntimeEnvironmentId: string | null | undefined
 }) {
+  const imageSource = useContext(LocalImageSourceContext)
   const rootRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -162,14 +164,14 @@ export function useMarkdownPreviewSourceFoundation({
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
 
   useEffect(() => {
-    if (!prewarmImages || exceedsMarkdownRichModeSizeLimit(renderedContent)) {
+    if (imageSource || !prewarmImages || exceedsMarkdownRichModeSizeLimit(renderedContent)) {
       return
     }
     const prewarm = prewarmMarkdownPreviewLocalImages(renderedContent, filePath, {
       runtimeContext: imageRuntimeContext
     })
     return prewarm.cancel
-  }, [renderedContent, filePath, imageRuntimeContext, prewarmImages])
+  }, [renderedContent, filePath, imageRuntimeContext, prewarmImages, imageSource])
 
   return {
     rootRef,

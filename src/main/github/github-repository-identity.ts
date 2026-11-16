@@ -16,8 +16,7 @@ import {
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import { isStableMissingGitRemoteError } from '../git/remotes/stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
-import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../shared/execution-host'
+import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { resolveGitHubProjectAccount } from './github-project-account'
 
 export type OwnerRepo = GitHubOwnerRepo
@@ -175,8 +174,8 @@ export async function getOwnerRepoForRemote(
   probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-  if (probeOptions.requireVerifiedSshProbe) {
-    requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
+  if (probeOptions.requireVerifiedSshProbe && context.connectionId) {
+    requireSshGitProvider(context.connectionId)
   }
   const runtimeKey = context.connectionId
     ? `ssh:${context.connectionId}`
@@ -233,8 +232,8 @@ async function resolveOwnerRepoForRemote(
   try {
     const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
     if (!remoteUrl) {
-      if (requireVerifiedSshProbe) {
-        requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
+      if (requireVerifiedSshProbe && context.connectionId) {
+        requireSshGitProvider(context.connectionId)
       }
       // Empty remote URL is stable until git config changes.
       ownerRepoCache.set(cacheKey, {

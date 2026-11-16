@@ -4,7 +4,8 @@ export const WorktreeSelector = z.object({
   worktree: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree selector'))
+    .pipe(z.string().min(1, 'Missing worktree selector')),
+  executionHostId: z.string().min(1).optional()
 })
 
 // Why: optional so older hosts ignore it and older clients keep the legacy trailing batch window;

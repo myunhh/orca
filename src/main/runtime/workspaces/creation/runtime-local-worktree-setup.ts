@@ -32,6 +32,17 @@ export function resolveRuntimeSetupDecision(
   return request.runHooks ? 'run' : (request.setupDecision ?? 'inherit')
 }
 
+export type RuntimePreparedWorktreeSetup = {
+  setup?: CreateWorktreeResult['setup']
+  defaultTabs?: CreateWorktreeResult['defaultTabs']
+  warning?: string
+  effectiveDecision: SetupDecision
+  setupTrustMismatch?: SetupTrustMismatch
+  hookFound: boolean
+  shouldRunSetup: boolean
+  didStartInProcessSetupHook: boolean
+}
+
 export async function prepareRuntimeLocalWorktreeSetup(args: {
   request: Pick<
     RuntimeManagedWorktreeCreateArgs,
@@ -45,16 +56,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   warning?: string
   /** Required for folder workspaces, whose shared directory can't name the workspace. */
   identity?: HookWorkspaceIdentity
-}): Promise<{
-  setup?: CreateWorktreeResult['setup']
-  defaultTabs?: CreateWorktreeResult['defaultTabs']
-  warning?: string
-  effectiveDecision: SetupDecision
-  setupTrustMismatch?: SetupTrustMismatch
-  hookFound: boolean
-  shouldRunSetup: boolean
-  didStartInProcessSetupHook: boolean
-}> {
+}): Promise<RuntimePreparedWorktreeSetup> {
   const { request, repo, worktreePath, settings } = args
   let warning = args.warning
   let setup: CreateWorktreeResult['setup']
@@ -149,7 +151,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
 }
 
 export function buildRuntimeSetupReceipt(
-  prepared: Awaited<ReturnType<typeof prepareRuntimeLocalWorktreeSetup>>,
+  prepared: RuntimePreparedWorktreeSetup,
   didSpawnSetup: boolean,
   terminalHandle: string | null | undefined
 ): NonNullable<CreateWorktreeResult['setupReceipt']> {

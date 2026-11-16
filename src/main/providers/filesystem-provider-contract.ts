@@ -10,6 +10,11 @@ import type { DirEntry } from '../../shared/file-listing/directory-entry'
 import type { FsChangeEvent } from '../../shared/file-watch/filesystem-change-event'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-disk-space/workspace-space-types'
+import type { FileBytesWritePrecondition } from '../../shared/file-write/file-bytes-write'
+import type {
+  FileWriteDiskPrecondition,
+  FileWriteResult
+} from '../../shared/file-write/file-write-disk-precondition'
 
 export type FileStat = {
   size: number
@@ -41,6 +46,13 @@ export type FileRangeReadResult = {
   bytesRead: number
 }
 
+export class FileRangeReadUnsupportedError extends Error {
+  constructor(message = 'Positional file reads are unavailable on this host') {
+    super(message)
+    this.name = 'FileRangeReadUnsupportedError'
+  }
+}
+
 export type IFilesystemProvider = {
   readDir(dirPath: string, options?: { followSymlinks?: boolean }): Promise<DirEntry[]>
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
@@ -68,6 +80,17 @@ export type IFilesystemProvider = {
   openFileUploadSession?(): Promise<FileUploadSession>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
+  writeFileWithDiskPrecondition?(
+    filePath: string,
+    content: string,
+    precondition?: FileWriteDiskPrecondition
+  ): Promise<FileWriteResult>
+  commitUpload?(tempPath: string, finalPath: string): Promise<void>
+  replaceWithUpload?(
+    tempPath: string,
+    finalPath: string,
+    precondition: FileBytesWritePrecondition
+  ): Promise<FileWriteResult>
   writeTerminalArtifact?(
     filePath: string,
     content: string,

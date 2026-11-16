@@ -1,5 +1,6 @@
 import {
   getRepoExecutionHostId,
+  getConnectionExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
@@ -23,12 +24,16 @@ export function assertRemovalHostMatchesRepoRow(
   repoId: string,
   removalHostId: ExecutionHostId
 ): void {
-  const repoRowHostId = getRepoExecutionHostId({
-    connectionId: repo.connectionId,
-    executionHostId: null
-  })
-  // The repo row always names local/SSH; null for runtime or malformed removal hosts therefore refuses them.
-  if (removalHostName(removalHostId) !== removalHostName(repoRowHostId)) {
+  const repoRowHostId = getRepoExecutionHostId(repo)
+  const ownerName = removalHostName(removalHostId)
+  const connectionHost = repo.connectionId
+    ? getConnectionExecutionHostId(repo.connectionId)
+    : undefined
+  if (
+    ownerName === null ||
+    ownerName !== removalHostName(repoRowHostId) ||
+    (connectionHost !== undefined && ownerName !== removalHostName(connectionHost))
+  ) {
     throw new Error(
       `Refusing to delete worktree: repo ${repoId} names execution host ${removalHostId}, but its checkout is only reachable as ${repoRowHostId}.`
     )

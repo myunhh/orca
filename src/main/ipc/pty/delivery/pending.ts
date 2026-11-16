@@ -16,6 +16,27 @@ import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import type { PtyEscapeBoundary } from './pty-escape-boundary'
 import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
 import type { PtyIpcSession } from '../session'
+import {
+  appendPendingProjectionAdmission,
+  compactPendingProjectionAdmissions,
+  type PendingProjectionAdmissions
+} from './pending-projection-admissions'
+
+export function compactPendingProjectionState(
+  session: PtyIpcSession,
+  pending: PendingProjectionAdmissions,
+  projectionSemanticsId?: string
+): PendingProjectionAdmissions {
+  const options = {
+    isPending: (id: string) => session.sshOutputIntake?.hasUnpublishedProjection(id) ?? false,
+    transfer: (ids: readonly string[], reason: string) =>
+      session.sshOutputIntake?.transferProjections(ids, reason)
+  }
+  const compacted = compactPendingProjectionAdmissions(pending, options)
+  return projectionSemanticsId
+    ? appendPendingProjectionAdmission(compacted, projectionSemanticsId, options)
+    : compacted
+}
 
 export function pendingDataCapChars(session: PtyIpcSession): number {
   return terminalOutputBacklogCapChars(session.getSettings?.().terminalScrollbackRows)
@@ -99,6 +120,9 @@ export function dropOversizedPendingPtyData(
     session.pendingOverflowMarkedPtys.add(id)
   }
   session.pendingDroppedChars += pending.data.length
+  if (pending.projectionAdmissionIds) {
+    session.sshOutputIntake?.transferProjections(pending.projectionAdmissionIds, 'pending-cap')
+  }
   // A trimmed tail would retain a corrupting gap; restore from snapshot and salvage only bounded query bytes.
   return toDroppedOutputSentinel(pending)
 }
@@ -129,10 +153,14 @@ export function appendPendingPtyData(
   containsBackgroundOutput: boolean,
   rawLength = data.length,
   transformed = false,
-  startEscapeBoundary: PtyEscapeBoundary = ''
+  startEscapeBoundary: PtyEscapeBoundary = '',
+  projectionSemanticsId?: string
 ): PendingPtyData {
   // Once dropped, keep bounded query/mode state while the restore sentinel supersedes ordinary output.
   if (existing?.droppedOutput === true) {
+    if (projectionSemanticsId) {
+      session.sshOutputIntake?.transferProjections([projectionSemanticsId], 'pending-cap')
+    }
     const mode2031 = scanDroppedMode2031Data(
       data,
       existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
@@ -154,6 +182,11 @@ export function appendPendingPtyData(
       droppedSynchronizedOutputState: synchronizedOutput.state
     }
   }
+  const projectionState = compactPendingProjectionState(
+    session,
+    existing ?? {},
+    projectionSemanticsId
+  )
   const nextContainsBackgroundOutput =
     existing?.containsBackgroundOutput === true || containsBackgroundOutput
   if (!existing) {
@@ -163,7 +196,8 @@ export function appendPendingPtyData(
       ...(rawLength !== data.length ? { rawLength } : {}),
       ...(transformed ? { transformed: true } : {}),
       ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
-      ...(startEscapeBoundary !== '' ? { startEscapeBoundary } : {})
+      ...(startEscapeBoundary !== '' ? { startEscapeBoundary } : {}),
+      ...projectionState
     }
     return dropOversizedPendingPtyData(session, id, pending)
   }
@@ -177,7 +211,8 @@ export function appendPendingPtyData(
     // Describes the batch start; gaps discard the batch, so appended bytes continue it.
     ...(existing.startEscapeBoundary !== undefined
       ? { startEscapeBoundary: existing.startEscapeBoundary }
-      : {})
+      : {}),
+    ...projectionState
   }
   if (typeof existing.startSeq === 'number') {
     next.startSeq = existing.startSeq

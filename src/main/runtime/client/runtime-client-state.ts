@@ -14,6 +14,7 @@ import {
 } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
+import { getSshPtyProvider } from '../../ipc/pty/provider/registry'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
@@ -136,8 +137,7 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
   ): Promise<void> {
     const { connectionId, allowUnverifiedStop } = options
-    // This process has no SSH PTY provider and cannot stop that host's terminals.
-    const provider = connectionId ? null : this.getLocalProvider()
+    const provider = connectionId ? getSshPtyProvider(connectionId) : this.getLocalProvider()
     if (!provider) {
       throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
     }
@@ -145,6 +145,7 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
       runtime: this,
       // Host-fence path-derived ids so same-id workspaces on other connections survive.
       resolvedWorktreeId: worktreeId,
+      ...(connectionId ? { resolvedConnectionId: connectionId, includeLocalRegistry: false } : {}),
       localProvider: provider,
       onPtyStopped: this.onPtyStopped ?? undefined,
       requirePhysicalStop: true,

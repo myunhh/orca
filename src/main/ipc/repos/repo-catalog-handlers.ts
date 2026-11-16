@@ -27,6 +27,8 @@ import { listHostRepoCatalogSnapshots } from '../../host-repo-catalog-snapshot/h
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
 import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
+import { listReposForExecutionHost } from './host-repo-catalog-snapshot'
+import type { ListReposForExecutionHostArgs } from '../../../shared/host-repo-catalog-contract'
 
 export function registerRepoCatalogHandlers(
   mainWindow: BrowserWindow,
@@ -42,6 +44,10 @@ export function registerRepoCatalogHandlers(
     enrichRepoGitUsernames(store, { onChanged: broadcastReposChanged })
     return visibleRepos(store)
   })
+
+  ipcMain.handle('repos:listForExecutionHost', (_event, args: ListReposForExecutionHostArgs) =>
+    listReposForExecutionHost(store, args)
+  )
 
   // The local rows `repos:list` hides once their WSL host owns them; read-only, for their chats.
   ipcMain.handle('repos:listWslMoved', () =>

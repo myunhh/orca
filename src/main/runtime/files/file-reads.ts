@@ -1,6 +1,4 @@
-import { open, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type {
   RuntimeFileReadResult,
@@ -14,7 +12,8 @@ import {
   requireLocalRuntimeFileRoute,
   requireRuntimeFileProvider,
   resolveFileExplorerPath,
-  resolveFileExplorerPaths
+  resolveFileExplorerPaths,
+  runtimeFileRouteForTarget
 } from './file-target'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
@@ -23,24 +22,26 @@ import {
   assertPreviewWithinTransportBudget,
   previewableBinaryByteLimit
 } from './file-preview-budget'
-import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
+import {
+  assertFileReadRange,
+  fileRangePage,
+  readLocalFileRange
+} from '../../ipc/filesystem/local-file-range-read'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { resolveLocalFileRequestPath } from '../../ipc/filesystem/access/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import { filePreviewForPath } from '../../../shared/file-preview/file-preview-kind'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../../../shared/file-content/node-bounded-file-reader'
+import { readPreviewBytes, readLocalMobileFile } from './local-file-reads'
 import { isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import type {
   DocPreviewFileAccessResult,
   DocPreviewFileChunk,
   DocPreviewFileTarget
 } from '../../../shared/document-preview/doc-preview-file-access'
-import type { LocalFilesystemProvider } from '../../providers/local-filesystem-provider'
+import type { IFilesystemProvider } from '../../providers/filesystem-provider-contract'
+import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
 
@@ -56,7 +57,6 @@ export class RuntimeFileReads {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
-    requireLocalRuntimeFileRoute(target)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -65,7 +65,19 @@ export class RuntimeFileReads {
     }
 
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    const content = await readLocalMobileFile(filePath, store)
+    let content: string
+    const route = runtimeFileRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      const result = await requireSshFilesystemProvider(route.connectionId).readFile(filePath, {
+        maxTextBytes: MOBILE_FILE_READ_MAX_BYTES
+      })
+      if (result.isBinary) {
+        throw new Error('binary_file')
+      }
+      content = result.content
+    } else {
+      content = await readLocalMobileFile(filePath, store)
+    }
     const truncated = truncateMobileFilePreview(content)
 
     return {
@@ -83,6 +95,16 @@ export class RuntimeFileReads {
     maxContentBytes?: number
   ): Promise<RuntimeFilePreviewResult> {
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    const route = runtimeFileRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      return assertPreviewWithinTransportBudget(
+        await requireSshFilesystemProvider(route.connectionId).readFile(target.path, {
+          maxTextBytes: MOBILE_FILE_READ_MAX_BYTES,
+          maxBinaryBytes: binaryPreviewMaxBytes(maxContentBytes)
+        }),
+        maxContentBytes
+      )
+    }
     requireLocalRuntimeFileRoute(target)
     const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
@@ -150,6 +172,9 @@ export class RuntimeFileReads {
       implicitRootRelativePath,
       authorizedRootRelativePaths
     )
+    if (!provider.readDocPreviewFileChunk) {
+      throw new Error('Secure document previews require a newer SSH relay')
+    }
     return provider.readDocPreviewFileChunk(target, offset, length)
   }
 
@@ -159,7 +184,10 @@ export class RuntimeFileReads {
     entryRelativePath: string,
     implicitRootRelativePath: string | null,
     authorizedRootRelativePaths: string[]
-  ): Promise<{ target: DocPreviewFileTarget; provider: LocalFilesystemProvider }> {
+  ): Promise<{
+    target: DocPreviewFileTarget
+    provider: Pick<IFilesystemProvider, 'readDocPreviewFile' | 'readDocPreviewFileChunk'>
+  }> {
     const relativePaths = [
       '',
       entryRelativePath,
@@ -193,6 +221,20 @@ export class RuntimeFileReads {
     length: number
   ): Promise<RuntimeFileReadChunkResult> {
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertFileReadRange(offset, length)
+    const route = runtimeFileRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      const provider = requireSshFilesystemProvider(route.connectionId)
+      if (!provider.readFileRange) {
+        throw new Error('File range reads require a newer SSH relay')
+      }
+      const info = await provider.stat(target.path)
+      if (info.type !== 'file') {
+        throw new Error('not_a_file')
+      }
+      const range = await provider.readFileRange(target.path, offset, length)
+      return fileRangePage(range.bytes.subarray(0, range.bytesRead), offset, info.size)
+    }
     requireLocalRuntimeFileRoute(target)
     const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
     return readLocalFileRange(filePath, offset, length)
@@ -232,51 +274,4 @@ function binaryPreviewMaxBytes(maxContentBytes: number | undefined): number {
   return maxContentBytes === undefined
     ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
     : previewableBinaryByteLimit(maxContentBytes)
-}
-
-async function readPreviewBytes(
-  filePath: string,
-  maxBytes: number,
-  options?: { regularFileOnly: true }
-): Promise<Buffer> {
-  try {
-    return (await readNodeFileWithinLimit(filePath, maxBytes, options)).buffer
-  } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      throw new Error('file_too_large')
-    }
-    throw error
-  }
-}
-
-async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promise<string> {
-  // Bound preview reads so large files cannot block the WebSocket.
-  const { bytes } = await readLocalRuntimeFilePrefix(
-    filePath,
-    store,
-    MOBILE_FILE_READ_MAX_BYTES + 1
-  )
-  // An extension the list does not know can still be binary; as text, a save would corrupt it.
-  if (isBinaryBuffer(bytes)) {
-    throw new Error('binary_file')
-  }
-  return bytes.toString('utf8')
-}
-
-export async function readLocalRuntimeFilePrefix(
-  filePath: string,
-  store: RuntimeStore,
-  maxBytes: number
-): Promise<{ bytes: Buffer; size: number }> {
-  const authorizedPath = windowsFsPath(await resolveRuntimeAuthorizedPath(filePath, store))
-  const fileStat = await stat(authorizedPath)
-  const readLimit = Math.min(fileStat.size, maxBytes)
-  const handle = await open(authorizedPath, 'r')
-  try {
-    const buffer = Buffer.alloc(readLimit)
-    const { bytesRead } = await handle.read(buffer, 0, readLimit, 0)
-    return { bytes: buffer.subarray(0, bytesRead), size: fileStat.size }
-  } finally {
-    await handle.close()
-  }
 }

@@ -13,6 +13,7 @@ import {
   type GrantedRemoteFilePreviewAddress,
   type RemotePreviewFileSnapshot
 } from './remote-file-preview-reader'
+import type { SshPreviewFile } from './ssh-preview-file'
 
 export type LocalPreviewTarget = {
   filePath: string
@@ -28,6 +29,7 @@ export type PreviewGrant = {
   mimeType: string
   senderId: number
   key: string
+  ssh?: SshPreviewFile
   // Why: a seek or prefetch burst opens several ranges at once; one stat answers all of them.
   stat?: { at: number; version: Promise<RemotePreviewVersion> }
   // Why: likewise one renewal answers a burst that found a granted file's grant lapsed.
@@ -60,7 +62,8 @@ export function mintPreviewUrl(
   store: Store,
   preview: FilePreview,
   snapshot?: RemotePreviewFileSnapshot,
-  size?: number
+  size?: number,
+  ssh?: SshPreviewFile
 ): PreviewUrl {
   const { mimeType } = preview
   let owned = senders.get(sender.id)
@@ -90,6 +93,9 @@ export function mintPreviewUrl(
     grants.set(token, { target, store, preview, mimeType, senderId: sender.id, key })
   }
   const grant = grants.get(token)
+  if (grant && ssh) {
+    grant.ssh = ssh
+  }
   if (grant && snapshot && 'remote' in target) {
     // A reload re-mints the same token; its fresh stat must replace a cached older size.
     grant.stat = { at: Date.now(), version: Promise.resolve({ remote: target.remote, snapshot }) }

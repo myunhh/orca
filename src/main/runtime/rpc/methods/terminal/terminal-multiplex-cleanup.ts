@@ -14,6 +14,14 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
     }
     stream.outputBatcher.flush()
     stream.outputBatcher.dispose()
+    if (stream.sourceRangeReplacement) {
+      runtime.rollbackRemoteTerminalSourceRangeReplacement(
+        stream.sourceRangeReplacement,
+        'stream-detached'
+      )
+      stream.sourceRangeReplacement = null
+    }
+    state.detachSourceRangeConsumer(stream, 'stream-detached')
     releaseAckWindow(state, stream)
     stream.ackPendingOutput = []
     stream.ackPendingOutputBytes = 0

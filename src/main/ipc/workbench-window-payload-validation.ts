@@ -15,26 +15,13 @@ import {
 } from '../../shared/workbench-window/workbench-window-types'
 import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 import { isDashboardTerminalInput } from './dashboard-payload-validation'
+import { isId, isNullableText, isRecord, isText } from './workbench-payload-fields'
+import {
+  admitWorkbenchBrowserAction,
+  isWorkbenchBrowserView
+} from './workbench-browser-payload-validation'
 
-const MAX_ID = 512
-const MAX_TEXT = 4096
 const MAX_LAYOUT_DEPTH = 16
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isId(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= MAX_ID
-}
-
-function isText(value: unknown, max = MAX_TEXT): value is string {
-  return typeof value === 'string' && value.length <= max
-}
-
-function isNullableText(value: unknown, max = MAX_TEXT): boolean {
-  return value === null || isText(value, max)
-}
 
 function isLayoutNode(value: unknown, depth: number): value is TerminalPaneLayoutNode {
   if (!isRecord(value) || depth > MAX_LAYOUT_DEPTH) {
@@ -101,6 +88,9 @@ function isTabView(value: unknown): value is WorkbenchTabView {
   if (value.kind === 'terminal') {
     return isTerminalView(value.terminal) && value.editor === null
   }
+  if (value.kind === 'browser') {
+    return isWorkbenchBrowserView(value.browser) && value.editor === null && value.terminal === null
+  }
   return value.kind === 'editor' && isEditorView(value.editor) && value.terminal === null
 }
 
@@ -112,7 +102,7 @@ function isAdoptableTab(value: unknown): value is WorkbenchAdoptableTab {
     isText(value.label) &&
     isText(value.worktreeLabel) &&
     isNullableText(value.repoLabel) &&
-    (value.kind === 'terminal' || value.kind === 'editor') &&
+    (value.kind === 'terminal' || value.kind === 'editor' || value.kind === 'browser') &&
     isNullableText(value.agentState, 64) &&
     typeof value.isImage === 'boolean'
   )
@@ -167,6 +157,25 @@ export function admitWorkbenchCommand(value: unknown): WorkbenchCommand | null {
       return isId(value.tabId) && isId(value.requestId)
         ? { kind: 'readEditorFile', tabId: value.tabId, requestId: value.requestId }
         : null
+    case 'readEditorImage':
+      return isId(value.tabId) && isId(value.requestId) && isText(value.rawSrc) && value.rawSrc
+        ? {
+            kind: 'readEditorImage',
+            tabId: value.tabId,
+            requestId: value.requestId,
+            rawSrc: value.rawSrc
+          }
+        : null
+    case 'selectBrowserPage':
+      return isId(value.tabId) && isId(value.pageId)
+        ? { kind: 'selectBrowserPage', tabId: value.tabId, pageId: value.pageId }
+        : null
+    case 'browserAction': {
+      const action = admitWorkbenchBrowserAction(value.action)
+      return isId(value.tabId) && isId(value.pageId) && action
+        ? { kind: 'browserAction', tabId: value.tabId, pageId: value.pageId, action }
+        : null
+    }
     case 'splitTerminalPane':
       return isId(value.tabId) &&
         isId(value.leafId) &&
@@ -225,10 +234,17 @@ export function admitWorkbenchNotice(value: unknown): WorkbenchNotice | null {
     return null
   }
   const rejected = value.rejectedAdoptTabId
-  if (rejected === undefined) {
-    return { kind: 'error', message: value.message }
+  const browserPageId = value.browserPageId
+  if (
+    (rejected !== undefined && !isId(rejected)) ||
+    (browserPageId !== undefined && !isId(browserPageId))
+  ) {
+    return null
   }
-  return isId(rejected)
-    ? { kind: 'error', message: value.message, rejectedAdoptTabId: rejected }
-    : null
+  return {
+    kind: 'error',
+    message: value.message,
+    ...(rejected === undefined ? {} : { rejectedAdoptTabId: rejected }),
+    ...(browserPageId === undefined ? {} : { browserPageId })
+  }
 }

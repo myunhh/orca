@@ -17,6 +17,7 @@ import { clearFlushTimerIfIdle } from './flush'
 import { advancePtyEscapeBoundary, escapeBoundaryFields } from './pty-escape-boundary'
 import type { PtyIpcSession } from '../session'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
+import type { LegacySshProjectionSemantics } from '../../ssh-pty-legacy-projection'
 
 export function rendererPtyIsKnownHidden(id: string): boolean {
   return rendererVisibilityKnownPtys.has(id) && !visibleRendererPtys.has(id)
@@ -52,6 +53,9 @@ function asDropSentinel(session: PtyIpcSession, pending: PendingPtyData): Pendin
     return pending
   }
   session.pendingDroppedChars += pending.data.length
+  if (pending.projectionAdmissionIds) {
+    session.sshOutputIntake?.transferProjections(pending.projectionAdmissionIds, 'stream-gap')
+  }
   return toDroppedOutputSentinel(pending)
 }
 
@@ -63,16 +67,21 @@ export function acceptPtyDataForRenderer(
     sequenceChars?: number
     transformed?: boolean
   },
-  outputSeq: number | undefined
+  outputSeq: number | undefined,
+  projection?: LegacySshProjectionSemantics
 ): void {
   const rawLength = payload.sequenceChars ?? payload.data.length
   const preservesSeq = !payload.transformed && rawLength === payload.data.length
   const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
+  const projectionId = projection?.identity.projectionSemanticsId
   // Advance before any early return: bytes accepted without a renderer still move the stream's parser.
   // Zero-sequence payloads are query copies salvaged from a provider gap, not stream bytes.
   const isQueryCopy = payload.sequenceChars === 0
   const startEscapeBoundary = isQueryCopy ? '' : advancePtyEscapeBoundary(payload.id, payload.data)
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
+    if (projectionId) {
+      session.sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
+    }
     if (session.flushTimer) {
       clearTimeout(session.flushTimer)
       session.flushTimer = null
@@ -87,11 +96,17 @@ export function acceptPtyDataForRenderer(
     return
   }
   if (session.rendererExitingPtyIds.has(payload.id)) {
+    if (projectionId) {
+      session.sshOutputIntake?.transferProjections([projectionId], 'pty-exiting')
+    }
     return
   }
   if (shouldDropHiddenRendererPtyData(payload.id, session.getSettings?.())) {
+    if (projectionId) {
+      session.sshOutputIntake?.transferProjections([projectionId], 'hidden-drop')
+    }
     discardPendingPtyDataAcrossGap(session, payload.id)
-    const droppedChars = payload.data.length
+    const droppedChars = projection ? rawLength : payload.data.length
     const drop = recordHiddenRendererPtyDataDrop(payload.id, droppedChars)
     warnIfDroppingHiddenBytesForVisiblePty(session, payload.id, droppedChars)
     if (drop.shouldEmitRestoreMarker) {
@@ -106,11 +121,17 @@ export function acceptPtyDataForRenderer(
     return
   }
   if (payload.data.length === 0 && !payload.transformed) {
+    if (projectionId) {
+      session.sshOutputIntake?.transferProjections([projectionId], 'empty-projection')
+    }
     return
   }
   const containsBackgroundOutput = rendererPtyIsKnownHidden(payload.id)
   const overflowMarkedBeforeAppend = session.pendingOverflowMarkedPtys.has(payload.id)
   const queued = session.pendingData.get(payload.id)
+  if (projection?.desktopSpan) {
+    session.sourceCreditPendingPtys.add(payload.id)
+  }
   const pending = appendPendingPtyData(
     session,
     payload.id,
@@ -126,7 +147,8 @@ export function acceptPtyDataForRenderer(
     containsBackgroundOutput,
     rawLength,
     payload.transformed === true,
-    startEscapeBoundary
+    startEscapeBoundary,
+    projectionId
   )
   const shouldEmitPendingCapRestoreMarker =
     pending.droppedOutput === true &&
@@ -175,7 +197,8 @@ export function acceptPtyDataForRenderer(
               ...(pending.transformed ? { transformed: true } : {}),
               ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
               ...escapeBoundaryFields(pending.startEscapeBoundary)
-            }
+            },
+        pending.projectionAdmissionIds
       )
     } finally {
       session.updateProducerFlowControl(payload.id)

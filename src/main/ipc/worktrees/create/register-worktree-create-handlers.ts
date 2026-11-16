@@ -16,7 +16,6 @@ import { workspaceSourceSchema, type WorkspaceSource } from '../../../../shared/
 
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
-import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { track } from '../../../telemetry/client'
 import { classifyWorkspaceCreateError } from '../../workspace-create-error-classifier'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
@@ -47,6 +46,26 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           throw new Error(`Repo not found: ${args.repoId}`)
         }
         assertWslMoveRepoWritable(store, repo)
+        const createRoute = isFolderRepo(repo) ? undefined : requireWorktreeCreateRoute(repo)
+        if (createRoute?.kind === 'ssh') {
+          // Runtime owns SSH creation, trust checks and terminal provisioning; do not run plugin hooks twice.
+          const result = await runtime.createManagedWorktree({
+            ...args,
+            repoSelector: { selector: `id:${repo.id}`, hostId: createRoute.hostId },
+            wslUserAct: true,
+            awaitTerminalProvisioning: true,
+            lineage: {
+              ...(args.parentWorkspace
+                ? {
+                    parentWorkspace: args.parentWorkspace,
+                    parentWorkspaceOrigin: 'manual' as const
+                  }
+                : {}),
+              ...(args.crossStoreParent ? { crossStoreParent: args.crossStoreParent } : {})
+            }
+          })
+          return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
+        }
         return withProjectWorktreeCreate(repo, async () => {
           const createArgs = await applyWorkspaceCreatePluginHook(args, repo)
 
@@ -66,27 +85,17 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           })
           try {
             // Track operational failures; malformed IPC rejected above is outside the creation funnel.
-            if (isFolderRepo(repo)) {
-              // Folder creation registers metadata; its setup prep checks ownership itself.
-              result = await createFolderWorkspace(createArgs, repo, store)
-            } else {
-              // Resolve executionHostId-only SSH ownership before any local Git operation.
-              const createRoute = requireWorktreeCreateRoute(repo)
-              if (createRoute.kind === 'ssh') {
-                // Record ownership before refusal so failure telemetry retains its host.
-                telemetry.timing.recordExecutionHost('ssh')
-                throw new SshHostNotServedError(createRoute.connectionId)
-              }
-              result = await createLocalWorktree(
-                createArgs,
-                repo,
-                store,
-                mainWindow,
-                runtime,
-                telemetry.timing,
-                creation?.named
-              )
-            }
+            result = isFolderRepo(repo)
+              ? await createFolderWorkspace(createArgs, repo, store)
+              : await createLocalWorktree(
+                  createArgs,
+                  repo,
+                  store,
+                  mainWindow,
+                  runtime,
+                  telemetry.timing,
+                  creation?.named
+                )
           } catch (error) {
             telemetry.failed(error)
             throw error

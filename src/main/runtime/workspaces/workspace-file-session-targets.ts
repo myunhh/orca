@@ -11,6 +11,7 @@ import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-ho
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import { RuntimeMarkdownTabOperations } from '../files/paths/runtime-markdown-tab-operations'
+import { currentFileExecutionHost } from '../files/file-execution-host-scope'
 export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOperations {
   protected abstract floatingWorkspaceToResolvedWorktree(
     ...args: Parameters<
@@ -65,6 +66,21 @@ export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOper
     worktree: ResolvedWorktree
     executionHostId: ExecutionHostId
   }> {
+    const requiredHostId = currentFileExecutionHost()
+    if (requiredHostId !== undefined) {
+      const candidate = await this.resolveWorkspaceCandidate(worktreeSelector, { requiredHostId })
+      const target =
+        candidate.kind === 'folder'
+          ? {
+              worktree: this.folderWorkspaceToResolvedWorktree(candidate.folder),
+              executionHostId: candidate.hostId
+            }
+          : this.runtimeFileTargetForWorktree(candidate.worktree)
+      if (target.executionHostId !== requiredHostId) {
+        throw new Error('Workspace host changed; refresh and try again')
+      }
+      return { worktree: target.worktree, executionHostId: requiredHostId }
+    }
     // Floating workspaces have no row; resolve their authority centrally.
     if (isFloatingWorkspaceSelector(worktreeSelector)) {
       return {

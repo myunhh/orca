@@ -12,12 +12,17 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
-import { canShowTabInWorkbenchWindow, findUnifiedTab } from '../workbench-tab-eligibility'
+import {
+  canShowTabInWorkbenchWindow,
+  findUnifiedTab,
+  workbenchTabMoveRestriction
+} from '../workbench-tab-eligibility'
 import { findTerminalTabRow } from '../workbench-tab-label'
 import { assignTabsToWorkbenchWindow } from '../workbench-tab-move'
 import { countWorkbenchWindowTabs } from '../workbench-window-summaries'
 import { readWorkbenchEditorContent } from './workbench-editor-content-read'
 import { routeRuntimeTerminalSplitRequest } from '@/hooks/ipc-events/terminal-ui-routing-ipc-bridge'
+import { runWorkbenchBrowserAction } from './workbench-browser-actions'
 
 // The host's frame lands shortly after creation resolves; adopting later could take a user's own new tab.
 const REMOTE_TERMINAL_ADOPT_GRACE_MS = 5_000
@@ -178,10 +183,11 @@ function adoptTabIntoWindow(tabId: string, windowId: string): void {
   ) {
     notifyWindow(
       windowId,
-      translate(
-        'components.workbench.window.bridge.workbench.command.handler.adoptUnavailable',
-        'That tab is no longer available to add.'
-      ),
+      workbenchTabMoveRestriction(state, tabId) ??
+        translate(
+          'components.workbench.window.bridge.workbench.command.handler.adoptUnavailable',
+          'That tab is no longer available to add.'
+        ),
       tabId
     )
     return
@@ -260,9 +266,33 @@ export function handleWorkbenchCommand({ windowId, command }: WorkbenchRelayedCo
       }
       return
     }
-    case 'readEditorFile':
-      void readWorkbenchEditorContent(state, command.tabId, command.requestId).then((content) =>
-        window.api.workbenchWindows?.publishEditorContent(windowId, content)
+    case 'browserAction':
+      void runWorkbenchBrowserAction(windowId, command.tabId, command.pageId, command.action).catch(
+        (error: unknown) =>
+          notifyWindow(windowId, error instanceof Error ? error.message : String(error))
       )
+      return
+    case 'selectBrowserPage': {
+      const tab = findUnifiedTab(state, command.tabId)
+      if (
+        tab?.contentType === 'browser' &&
+        state.browserPagesByWorkspace[tab.entityId]?.some((page) => page.id === command.pageId)
+      ) {
+        state.setActiveBrowserPage(tab.entityId, command.pageId)
+      }
+      return
+    }
+    case 'readEditorImage':
+    case 'readEditorFile':
+      void readWorkbenchEditorContent(
+        state,
+        command.tabId,
+        command.requestId,
+        command.kind === 'readEditorImage' ? command.rawSrc : undefined
+      ).then((content) => {
+        if (useAppStore.getState().detachedWindowIdByTabId[command.tabId] === windowId) {
+          void window.api.workbenchWindows?.publishEditorContent(windowId, content)
+        }
+      })
   }
 }

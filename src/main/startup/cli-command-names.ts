@@ -61,6 +61,7 @@ export const CLI_COMMAND_NAMES = [
   'reference',
   'reload',
   'repo',
+  'research',
   'screenshot',
   'scroll',
   'scrollintoview',

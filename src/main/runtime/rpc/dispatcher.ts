@@ -27,13 +27,14 @@ import {
   type RpcDispatchStreamingOptions
 } from './dispatcher-stream-options'
 import { mapDispatcherError } from './dispatcher-error-response'
-import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
+import { invokeDispatcherStreaming } from './dispatcher-streaming-invocation'
 import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import type { RpcCallerScope } from './rpc-caller-scope'
 import { runWithActiveRpcCaller } from './rpc-active-caller'
 import { admitRpcRequest } from './rpc-request-admission-prologue'
 import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './orcad-feature-readiness'
 import { routeRemoteOwnedCall } from '../orchestration/federation/remote-owned/remote-owned-route'
+import { withFileExecutionHost } from '../files/file-execution-host-scope'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -158,28 +159,13 @@ export class RpcDispatcher {
       return
     }
 
-    const { emit, recordedFeatureInteractions } = createDispatcherStreamingFeatureEmitter(
+    await invokeDispatcherStreaming(
       this.runtime,
-      request,
+      { method, request, params, caller },
       meta,
-      reply
+      reply,
+      options
     )
-    try {
-      const result = await method.handler(
-        params,
-        rpcContextFromTransport(this.runtime, request, options, caller, params),
-        emit
-      )
-      recordRuntimeFeatureInteraction(
-        this.runtime,
-        request.method,
-        result,
-        recordedFeatureInteractions,
-        request.params
-      )
-    } catch (error) {
-      reply(mapDispatcherError(request, meta, error))
-    }
   }
 
   private admit<M extends RpcMethod | RpcStreamingMethod>(
@@ -275,22 +261,26 @@ export class RpcDispatcher {
       return runWithActiveRpcCaller(
         context.caller,
         () =>
-          method.handler(effectiveParams, {
-            ...context,
-            authenticatedCallerFingerprint:
-              mutation?.identity.callerFingerprint ?? callerFingerprint,
-            recordMutationReceipt: mutation?.recordReceipt,
-            markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
-            markMutationEffectPossible: mutation?.markEffectPossible,
-            orchestrationMutation: mutation?.identity,
-            replayedMutationReceipt: mutation?.replayedReceipt,
-            legacyCoordinatorRunId,
-            legacyCoordinatorAuthority: legacyCoordinator?.authority,
-            revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
-            orchestrationCompatibilityCallerAuthority:
-              compatibility.orchestrationCompatibilityCallerAuthority,
-            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
-          }),
+          withFileExecutionHost(
+            request.method.startsWith('files.') ? effectiveParams : undefined,
+            () =>
+              method.handler(effectiveParams, {
+                ...context,
+                authenticatedCallerFingerprint:
+                  mutation?.identity.callerFingerprint ?? callerFingerprint,
+                recordMutationReceipt: mutation?.recordReceipt,
+                markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
+                markMutationEffectPossible: mutation?.markEffectPossible,
+                orchestrationMutation: mutation?.identity,
+                replayedMutationReceipt: mutation?.replayedReceipt,
+                legacyCoordinatorRunId,
+                legacyCoordinatorAuthority: legacyCoordinator?.authority,
+                revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
+                orchestrationCompatibilityCallerAuthority:
+                  compatibility.orchestrationCompatibilityCallerAuthority,
+                orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+              })
+          ),
         request.orchestrationCompatibilityEvidence?.agentSessionId
       )
     }

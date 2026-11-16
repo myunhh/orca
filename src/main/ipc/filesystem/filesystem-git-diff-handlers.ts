@@ -8,6 +8,7 @@ import {
 } from './access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
+import { requireSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 
@@ -32,6 +33,23 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
         wakeWslDistro?: boolean
       }
     ): Promise<GitDiffResult> => {
+      if (args.connectionId) {
+        const diffs = await requireSshGitProvider(args.connectionId).getBranchDiff(
+          args.worktreePath,
+          args.compare.mergeBase,
+          {
+            includePatch: true,
+            filePath: args.filePath,
+            oldPath: args.oldPath,
+            headOid: args.compare.headOid
+          }
+        )
+        const diff = diffs[0]
+        if (!diff) {
+          throw new Error('Requested branch diff is no longer available.')
+        }
+        return diff
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       return readWorktreeGitUnlessWslStopped(
         store,
@@ -71,6 +89,14 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
     ): Promise<GitDiffResult> => {
       const commitOid = validateFullGitObjectId(args.commitOid, 'commitOid')
       const parentOid = args.parentOid ? validateFullGitObjectId(args.parentOid, 'parentOid') : null
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).getCommitDiff(args.worktreePath, {
+          commitOid,
+          parentOid,
+          filePath: args.filePath,
+          oldPath: args.oldPath
+        })
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       return readWorktreeGitUnlessWslStopped(
         store,

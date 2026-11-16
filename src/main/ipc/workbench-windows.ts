@@ -1,6 +1,7 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   WorkbenchSnapshot,
   WorkbenchWindowEntry
@@ -23,6 +24,11 @@ import {
   admitWorkbenchSnapshot,
   admitWorkbenchTabIds
 } from './workbench-window-payload-validation'
+import { WorkbenchBrowserStreams } from './workbench-browser-streams'
+import {
+  admitWorkbenchBrowserFrame,
+  isWorkbenchBrowserViewport
+} from './workbench-browser-payload-validation'
 
 const CHANNELS = [
   'workbench:open',
@@ -32,10 +38,14 @@ const CHANNELS = [
   'workbench:command',
   'workbench:publishEditorContent',
   'workbench:publishNotice',
+  'workbench:setBrowserViewport',
+  'workbench:streamLocalBrowser',
+  'workbench:publishBrowserFrame',
   'workbench:closeAll'
 ] as const
 
 let disposeClosedListener: (() => void) | null = null
+let disposeBrowserStreams: (() => void) | null = null
 
 function windowIdArg(value: unknown): string | null {
   const windowId =
@@ -61,6 +71,7 @@ function revealMainWindow(): void {
 /** Workbench windows are views: the trusted main renderer publishes and executes, the window requests. */
 export function registerWorkbenchWindowHandlers(
   store: Store,
+  runtime: OrcaRuntimeService,
   keybindings?: KeybindingService
 ): void {
   for (const channel of CHANNELS) {
@@ -68,10 +79,18 @@ export function registerWorkbenchWindowHandlers(
   }
   // Replay on mount; dropped with its window.
   const lastSnapshotByWindowId = new Map<string, WorkbenchSnapshot>()
+  const isAssignedBrowserPage = (windowId: string, pageId: string): boolean =>
+    lastSnapshotByWindowId
+      .get(windowId)
+      ?.tabs.some((tab) => tab.browser?.pages.some((page) => page.id === pageId)) === true
+  disposeBrowserStreams?.()
+  const browserStreams = new WorkbenchBrowserStreams(runtime, isAssignedBrowserPage)
+  disposeBrowserStreams = () => browserStreams.closeAll()
 
   disposeClosedListener?.()
   disposeClosedListener = onWorkbenchWindowClosed((windowId) => {
     lastSnapshotByWindowId.delete(windowId)
+    browserStreams.closeWindow(windowId)
     sendToTrustedUIRenderer('workbench:windowClosed', { windowId })
   })
 
@@ -105,6 +124,7 @@ export function registerWorkbenchWindowHandlers(
       return
     }
     lastSnapshotByWindowId.set(windowId, snapshot)
+    browserStreams.reconcile()
     window.webContents.send('workbench:snapshot', snapshot)
   })
 
@@ -160,10 +180,81 @@ export function registerWorkbenchWindowHandlers(
     }
   })
 
+  ipcMain.handle('workbench:setBrowserViewport', (event, args: unknown): boolean => {
+    if (
+      !args ||
+      typeof args !== 'object' ||
+      !('pageId' in args) ||
+      typeof args.pageId !== 'string' ||
+      !('viewport' in args) ||
+      !isWorkbenchBrowserViewport(args.viewport)
+    ) {
+      return false
+    }
+    const windowId = getWorkbenchWindowIdForSender(event.sender)
+    if (!windowId || !isAssignedBrowserPage(windowId, args.pageId)) {
+      return false
+    }
+    sendToTrustedUIRenderer('workbench:browserViewportChanged', {
+      windowId,
+      pageId: args.pageId,
+      viewport: args.viewport
+    })
+    return true
+  })
+
+  ipcMain.handle('workbench:streamLocalBrowser', (event, args: unknown): void => {
+    if (
+      !isTrustedUIRenderer(event.sender) ||
+      !args ||
+      typeof args !== 'object' ||
+      !('pageId' in args) ||
+      typeof args.pageId !== 'string' ||
+      !('viewport' in args) ||
+      !isWorkbenchBrowserViewport(args.viewport) ||
+      ('restart' in args && args.restart !== undefined && typeof args.restart !== 'boolean')
+    ) {
+      return
+    }
+    const windowId = windowIdArg(args)
+    if (!windowId || !isAssignedBrowserPage(windowId, args.pageId)) {
+      return
+    }
+    browserStreams.setViewport(
+      windowId,
+      args.pageId,
+      args.viewport,
+      'restart' in args && args.restart === true
+    )
+  })
+
+  ipcMain.handle('workbench:publishBrowserFrame', (event, args: unknown): void => {
+    if (
+      !isTrustedUIRenderer(event.sender) ||
+      !args ||
+      typeof args !== 'object' ||
+      !('frame' in args) ||
+      !args.frame ||
+      typeof args.frame !== 'object'
+    ) {
+      return
+    }
+    const windowId = windowIdArg(args)
+    const frame = admitWorkbenchBrowserFrame(args.frame)
+    if (!windowId || !frame) {
+      return
+    }
+    const assigned = isAssignedBrowserPage(windowId, frame.pageId)
+    if (assigned) {
+      getWorkbenchWindow(windowId)?.webContents.send('workbench:browserFrame', frame)
+    }
+  })
+
   // A reloaded main renderer lost its detached-tab map; its windows would show stale views.
   ipcMain.handle('workbench:closeAll', (event): void => {
     if (isTrustedUIRenderer(event.sender)) {
       lastSnapshotByWindowId.clear()
+      browserStreams.closeAll()
       closeAllWorkbenchWindows()
     }
   })

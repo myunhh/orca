@@ -1,9 +1,66 @@
 import { OrcaRuntimeWithRegisterPty } from '../lifecycle/pty-registration'
+import type { TerminalOutputSourceRange } from '../../../../shared/terminal-output-source-range'
 
 export abstract class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRegisterPty {
   protected abstract disposeHeadlessTerminal(ptyId: string): void
 
   protected abstract replaceHeadlessTerminalAfterExecutionContextChange(ptyId: string): void
+
+  abstract onPtyData(
+    ptyId: string,
+    data: string,
+    at: number,
+    sequenceChars?: number,
+    transformed?: boolean,
+    captureModelReceipt?: (completion: Promise<void>) => void,
+    sourceRanges?: readonly TerminalOutputSourceRange[]
+  ): number
+  protected abstract shouldAnswerQueriesForLiveChunk(ptyId: string): boolean
+  abstract maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null
+  protected abstract trackHeadlessTerminalData(
+    ptyId: string,
+    data: string,
+    outputSequence: number,
+    forwardQueryReplies?: boolean
+  ): Promise<void>
+  /** Arrival-order mode scan: the settled tracker plus any in-flight snapshot capture's. */
+  protected scanProviderModeTrackers(ptyId: string, data: string): void {
+    this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
+    for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
+      tracker.scan(data)
+    }
+  }
+
+  acceptPtyDataBounded(
+    ptyId: string,
+    data: string,
+    at: number,
+    sequenceChars = data.length,
+    transformed = false,
+    sourceRanges?: readonly TerminalOutputSourceRange[]
+  ): { sequence: number; completion: Promise<void> } {
+    let completion: Promise<void> | undefined
+    const sequence = this.onPtyData(
+      ptyId,
+      data,
+      at,
+      sequenceChars,
+      transformed,
+      (receipt) => {
+        completion = receipt
+      },
+      sourceRanges
+    )
+    if (!completion) {
+      throw new Error('PTY model admission receipt was not captured')
+    }
+    return { sequence, completion }
+  }
+
+  resetPtyModelAfterMigrationFailure(ptyId: string): void {
+    this.providerSnapshotPreferredPtys.add(ptyId)
+    this.disposeHeadlessTerminal(ptyId)
+  }
 
   preparePtyExecutionContext(
     ptyId: string,

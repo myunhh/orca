@@ -13,7 +13,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     if (this.inactiveClaudeFetching.size > 0) {
       return
     }
-    const accounts = (this.inactiveClaudeAccountsResolver?.() ?? []).filter(
+    const accounts = (this.inactiveClaudeAccountsResolver?.(this.claudeFetchTarget) ?? []).filter(
       (account) => !this.isRetryAfterActive(this.inactiveClaudeCache.get(account.id) ?? null)
     )
     if (accounts.length === 0) {
@@ -92,7 +92,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     if (this.inactiveCodexFetchInFlight) {
       return
     }
-    const accounts = this.inactiveCodexAccountsResolver?.() ?? []
+    const accounts = this.inactiveCodexAccountsResolver?.(this.codexFetchTarget) ?? []
     if (accounts.length === 0) {
       return
     }
@@ -191,20 +191,22 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
   }
 
   protected isCurrentInactiveClaudeAccount(accountId: string): boolean {
-    return (this.inactiveClaudeAccountsResolver?.() ?? []).some(
+    return (this.inactiveClaudeAccountsResolver?.(this.claudeFetchTarget) ?? []).some(
       (account) => account.id === accountId
     )
   }
 
   protected isCurrentInactiveCodexAccount(accountId: string): boolean {
-    return (this.inactiveCodexAccountsResolver?.() ?? []).some(
+    return (this.inactiveCodexAccountsResolver?.(this.codexFetchTarget) ?? []).some(
       (account) => account.id === accountId
     )
   }
 
   protected pruneInactiveClaudeState(): void {
     const currentIds = new Set(
-      (this.inactiveClaudeAccountsResolver?.() ?? []).map((account) => account.id)
+      (this.inactiveClaudeAccountsResolver?.(this.claudeFetchTarget) ?? []).map(
+        (account) => account.id
+      )
     )
     for (const accountId of this.inactiveClaudeCache.keys()) {
       if (!currentIds.has(accountId)) {
@@ -220,7 +222,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
 
   protected pruneInactiveCodexState(): void {
     const currentIds = new Set(
-      (this.inactiveCodexAccountsResolver?.() ?? []).map((account) => account.id)
+      (this.inactiveCodexAccountsResolver?.(this.codexFetchTarget) ?? []).map(
+        (account) => account.id
+      )
     )
     for (const accountId of this.inactiveCodexCache.keys()) {
       if (!currentIds.has(accountId)) {

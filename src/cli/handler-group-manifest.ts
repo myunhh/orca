@@ -93,7 +93,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   ...WORKTREE_HANDLER_GROUPS,
   {
     name: 'file',
-    keys: ['file open', 'file diff', 'file open-changed'],
+    keys: ['file open', 'file diff', 'file open-changed', 'file deploy', 'file collect'],
     load: async () => (await import('./handlers/file.js')).FILE_HANDLERS
   },
   {

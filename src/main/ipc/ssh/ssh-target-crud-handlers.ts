@@ -33,6 +33,8 @@ import {
   setDesktopBrowserBridgeHostStopped
 } from '../browser/desktop-browser-bridge-reconcile'
 import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
+import { activeSessions } from './ssh-active-relay-sessions'
+import { teardownSshTargetTransport } from './ssh-session-teardown'
 
 // Add/import can re-adopt orphaned workspaces; report them so the renderer refreshes repo ownership.
 function takeRepoReadoptions(): SshRepoReadoption[] {
@@ -132,6 +134,21 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
     id,
     omitRendererSshTargetGeneration(updates)
   )
+  if (updated && Object.hasOwn(updates, 'relayGracePeriodSeconds')) {
+    activeSessions.get(id)?.setGracePeriod(updated.relayGracePeriodSeconds)
+  }
+  if (
+    updated &&
+    before &&
+    allowsDirectSshRelay(updated) &&
+    (fingerprintRuntimeSshTarget(before) !== fingerprintRuntimeSshTarget(updated) ||
+      before.remoteRuntime !== updated.remoteRuntime)
+  ) {
+    rotateSshProviderAuthority(id)
+    void runTargetLifecycle(id, () => teardownSshTargetTransport(id)).catch((error: unknown) => {
+      console.warn(`[ssh] Failed to detach the edited SSH target ${id}:`, error)
+    })
+  }
   // Revoke desktop-browser control immediately when permission is disabled.
   requestDesktopBrowserBridgeReconcile()
   if (isRemoteCliControlAllowed(updated)) {

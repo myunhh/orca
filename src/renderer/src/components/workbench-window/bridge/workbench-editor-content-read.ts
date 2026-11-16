@@ -4,9 +4,16 @@ import { WORKBENCH_MAX_EDITOR_CONTENT_CHARS } from '../../../../../shared/workbe
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
-import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/files/access/local-file-access'
+import {
+  documentResourceAccess,
+  editorTabFileAccess,
+  isClientLocalReadOnlyTab
+} from '@/lib/files/access/local-file-access'
 import { translate } from '@/i18n/i18n'
 import { findUnifiedTab, isWorkbenchViewableFile } from '../workbench-tab-eligibility'
+import { resolveImageAbsolutePath } from '@/components/editor/markdown/link-routing/markdown-preview-links'
+import { deriveMarkdownPreviewSourceRoot } from '@/components/editor/markdown-preview/links/markdown-preview-source-routing'
+import { relativePathInsideRoot } from '../../../../../shared/cross-platform-path'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -16,7 +23,8 @@ function errorMessage(error: unknown): string {
 export async function readWorkbenchEditorContent(
   state: AppState,
   tabId: string,
-  requestId: string
+  requestId: string,
+  rawImageSrc?: string
 ): Promise<WorkbenchEditorContent> {
   const tab = findUnifiedTab(state, tabId)
   const file = tab ? state.openFiles.find((candidate) => candidate.id === tab.entityId) : undefined
@@ -32,6 +40,12 @@ export async function readWorkbenchEditorContent(
     }
   }
   try {
+    const imagePath =
+      rawImageSrc === undefined ? null : resolveImageAbsolutePath(rawImageSrc, file.filePath)
+    if (rawImageSrc !== undefined && !imagePath) {
+      throw new Error('Not a document image path')
+    }
+    const worktreeRoot = deriveMarkdownPreviewSourceRoot(file.filePath, file.relativePath)
     const clientLocal = isClientLocalReadOnlyTab(file)
     const target =
       clientLocal && file.runtimeEnvironmentId === undefined
@@ -43,13 +57,15 @@ export async function readWorkbenchEditorContent(
     // Base64 rather than an orca-media URL: preview grants are minted per renderer.
     const result = await readRuntimeFileContent({
       target,
-      filePath: file.filePath,
-      relativePath: file.relativePath,
+      filePath: imagePath ?? file.filePath,
+      relativePath: imagePath
+        ? (relativePathInsideRoot(worktreeRoot, imagePath) ?? imagePath)
+        : file.relativePath,
       worktreeId: file.worktreeId,
       connectionId,
       expectedExternalSshTargetId: file.externalSshTargetId,
-      access: editorTabFileAccess(state, file),
-      terminalArtifactGrantId: file.terminalArtifactGrantId
+      access: imagePath ? documentResourceAccess(file.filePath) : editorTabFileAccess(state, file),
+      terminalArtifactGrantId: imagePath ? undefined : file.terminalArtifactGrantId
     })
     if (result.content.length > WORKBENCH_MAX_EDITOR_CONTENT_CHARS) {
       return {

@@ -6,15 +6,21 @@ import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/executi
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 
-/** Require a validated local removal route before listing, preventing reads before non-local hosts are refused. */
+/** Use the same verified owner for registration proof and the later destructive operation. */
 export async function listWorktreesOnRemovalRoute(
-  _route: WorktreeRemovalRoute,
+  route: WorktreeRemovalRoute,
   repo: Repo,
   store: ProjectRuntimeResolutionStore
 ): Promise<{
   localWorktreeGitOptions: LocalProjectWorktreeGitOptions
   registeredWorktrees: GitWorktreeInfo[]
 }> {
+  if (route.kind === 'ssh') {
+    return {
+      localWorktreeGitOptions: {},
+      registeredWorktrees: await route.provider.listWorktrees(repo.path)
+    }
+  }
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   return {
     localWorktreeGitOptions,

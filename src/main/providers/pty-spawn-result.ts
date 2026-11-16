@@ -7,11 +7,14 @@ import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session/
 import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
+import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
 
 export type PtySpawnResult = TerminalLaunchResult & {
   /** Execution-host probe; absent on older hosts and reattachments. */
   openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
+  /** SSH host-minted activation, present only while its first source delivery is pending. */
+  sourceActivation?: PtySourceReceivingActivation
   /** App-routable id; remote relay-local handles cannot route renderer/runtime IPC. */
   id: string
   /** Opaque provider-owned identity for this process behind a reusable PTY id. */

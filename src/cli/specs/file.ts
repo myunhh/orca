@@ -3,6 +3,37 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const FILE_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['file', 'deploy'],
+    destructive: true,
+    summary: 'Preview or deploy local code and data to the hosts in a distribution manifest',
+    usage: 'orca file deploy <manifest> [--target <name>] [--apply] [--overwrite] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'manifest', 'target', 'apply', 'overwrite'],
+    positionalArgs: ['manifest'],
+    notes: [
+      'The manifest contains source, inputs, results and targets. Each target names an exact id: or folder: worktree selector and a relative directory. Set environment for a paired server, or executionHostId (ssh:<target-id>) for direct SSH.',
+      'Without --apply, only list destinations. --apply snapshots selected local files once before transferring the same bytes to each host. --overwrite explicitly allows replacing destination files.',
+      'Only listed input paths are copied. Symlinks are refused; file permissions and empty directories are not replicated. No destination files are deleted.',
+      'Transfers are per-file, not a transaction across hosts. A failure reports completed counts and exits unsuccessfully; inspect partial results before retrying.'
+    ],
+    examples: [
+      'orca file deploy experiments.json',
+      'orca file deploy experiments.json --target gpu-a --apply --overwrite'
+    ]
+  },
+  {
+    path: ['file', 'collect'],
+    summary: 'Collect experiment results into separate local directories for each host',
+    usage: 'orca file collect <manifest> --output <directory> [--target <name>] [--apply] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'manifest', 'output', 'target', 'apply'],
+    positionalArgs: ['manifest'],
+    notes: [
+      'Uses the manifest results paths on each target workspace. Preview lists remote files; --apply writes them below output/<target-name>.',
+      'The output directory must not already exist. Collection never overwrites the local source tree or previous results.',
+      'Collect completed experiments: remote files can change while being read. Symlinks are refused. Failed batches retain completed results and report an unsuccessful exit.'
+    ],
+    examples: ['orca file collect experiments.json --output results/run-001 --apply']
+  },
+  {
     path: ['file', 'open'],
     summary:
       'Open a file as a tab in its worktree without changing your view; --focus brings you to it',

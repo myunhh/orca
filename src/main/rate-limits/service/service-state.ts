@@ -127,8 +127,12 @@ export abstract class RateLimitServiceState {
   protected antigravityAccountUsageRecorder: AntigravityAccountUsageRecorder | null = null
   protected antigravityAccounts: AntigravityAccountUsage[] = []
   protected museUsageEnabledResolver: MuseUsageEnabledResolver | null = null
-  protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccount[]) | null = null
-  protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
+  protected inactiveClaudeAccountsResolver:
+    | ((target: NormalizedClaudeAccountSelectionTarget) => InactiveClaudeAccount[])
+    | null = null
+  protected inactiveCodexAccountsResolver:
+    | ((target: NormalizedCodexAccountSelectionTarget) => InactiveCodexAccountInfo[])
+    | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
   protected inactiveClaudeCache = new Map<string, ProviderRateLimits>()
   protected inactiveCodexCache = new Map<string, ProviderRateLimits>()

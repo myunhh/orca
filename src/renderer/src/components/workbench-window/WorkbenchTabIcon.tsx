@@ -1,4 +1,4 @@
-import { FileText, Image, SquareTerminal } from 'lucide-react'
+import { FileText, Globe, Image, SquareTerminal } from 'lucide-react'
 import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 
 const AGENT_DOT_STATES: readonly AgentDotState[] = [
@@ -21,7 +21,7 @@ export function WorkbenchTabIcon({
   agentState,
   isImage
 }: {
-  kind: 'terminal' | 'editor'
+  kind: 'terminal' | 'editor' | 'browser'
   agentState: string | null
   isImage: boolean
 }): React.JSX.Element {
@@ -31,6 +31,9 @@ export function WorkbenchTabIcon({
   }
   if (kind === 'terminal') {
     return <SquareTerminal className="size-3.5 shrink-0" />
+  }
+  if (kind === 'browser') {
+    return <Globe className="size-3.5 shrink-0" />
   }
   return isImage ? (
     <Image className="size-3.5 shrink-0" />

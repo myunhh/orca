@@ -1,8 +1,11 @@
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, isRepoOnCatalogHost } from '../../../../shared/execution-host'
 import { scopeHooksToRepoKind } from '../../../../shared/folder-workspace-hooks'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
-import type { RunApprovedWorktreeSetupResult } from '../../../../shared/worktree/create-types'
+import type {
+  CreateWorktreeResult,
+  RunApprovedWorktreeSetupResult
+} from '../../../../shared/worktree/create-types'
 import {
   getDefaultTabsLaunch,
   getEffectiveHooksFromConfig
@@ -20,11 +23,15 @@ import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { WorktreeTerminalProvisioningArgs } from '../startup/runtime-worktree-terminal-provisioning'
+import { requireWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
+import { requireSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
+import { prepareRuntimeSshWorktreeSetup } from './runtime-ssh-worktree-setup'
 
 type ApprovedSetupRuntime = {
   showManagedWorktree: (
     selector: string
-  ) => Promise<Pick<Worktree, 'id' | 'repoId' | 'path' | 'displayName'>>
+  ) => Promise<Pick<Worktree, 'id' | 'repoId' | 'path' | 'displayName' | 'hostId'>>
   requireStore: () => Pick<RuntimeStore, 'getRepo' | 'getSettings'>
   provisionManagedWorktreeTerminals: (args: WorktreeTerminalProvisioningArgs) => Promise<unknown>
 }
@@ -45,25 +52,53 @@ export async function runApprovedCreatedWorktreeSetup(
   if (!repo || (isFolderRepo(repo) && !isRepoOnCatalogHost(repo))) {
     return { status: 'not_configured' }
   }
-  const yamlHooks = scopeHooksToRepoKind(repo, loadHooks(worktree.path))
-  const mismatch = checkCreatedWorktreeSetupTrust(repo, yamlHooks, 'run', { approvedSetupHash })
-  if (mismatch) {
-    return { status: 'mismatch', setupTrustMismatch: mismatch }
+  if (worktree.hostId && worktree.hostId !== getRepoExecutionHostId(repo)) {
+    throw new Error(
+      'Workspace setup ownership changed. Refresh the workspace before approving setup.'
+    )
   }
-  const setupScript = getEffectiveHooksFromConfig(repo, yamlHooks)?.scripts.setup
-  const setup = setupScript
-    ? await createSetupRunnerScript(
-        repo,
-        worktree.path,
-        setupScript,
-        getLocalProjectWorktreeGitOptions(store, repo),
-        resolveSetupRunnerShell(store.getSettings()),
-        yamlHooks?.setupAgentStartupPolicy,
-        { worktreeId: worktree.id, displayName: worktree.displayName }
-      )
-    : undefined
-  // The create already opened the command-less default tabs.
-  const defaultTabs = defaultTabsWithCommands(getDefaultTabsLaunch(yamlHooks, repo, 'run'))
+  const route = requireWorktreeCreateRoute(repo)
+  let setup: CreateWorktreeResult['setup']
+  let defaultTabs: CreateWorktreeResult['defaultTabs']
+  if (route.kind === 'ssh') {
+    const prepared = await prepareRuntimeSshWorktreeSetup({
+      request: {
+        repoSelector: { selector: `id:${repo.id}`, hostId: route.hostId },
+        name: worktree.displayName ?? repo.displayName,
+        setupDecision: 'run',
+        approvedSetupHash
+      },
+      repo,
+      worktreePath: worktree.path,
+      provider: requireSshGitProvider(route.connectionId),
+      fs: requireSshFilesystemProvider(route.connectionId)
+    })
+    if (prepared.setupTrustMismatch) {
+      return { status: 'mismatch', setupTrustMismatch: prepared.setupTrustMismatch }
+    }
+    setup = prepared.setup
+    defaultTabs = defaultTabsWithCommands(prepared.defaultTabs)
+  } else {
+    const yamlHooks = scopeHooksToRepoKind(repo, loadHooks(worktree.path))
+    const mismatch = checkCreatedWorktreeSetupTrust(repo, yamlHooks, 'run', { approvedSetupHash })
+    if (mismatch) {
+      return { status: 'mismatch', setupTrustMismatch: mismatch }
+    }
+    const setupScript = getEffectiveHooksFromConfig(repo, yamlHooks)?.scripts.setup
+    setup = setupScript
+      ? await createSetupRunnerScript(
+          repo,
+          worktree.path,
+          setupScript,
+          getLocalProjectWorktreeGitOptions(store, repo),
+          resolveSetupRunnerShell(store.getSettings()),
+          yamlHooks?.setupAgentStartupPolicy,
+          { worktreeId: worktree.id, displayName: worktree.displayName }
+        )
+      : undefined
+    // The create already opened the command-less default tabs.
+    defaultTabs = defaultTabsWithCommands(getDefaultTabsLaunch(yamlHooks, repo, 'run'))
+  }
   if (!setup && !defaultTabs) {
     return { status: 'not_configured' }
   }

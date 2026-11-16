@@ -37,6 +37,12 @@ const WEB_WORKSPACE_SLEEP_TIMEOUT_MS = 150_000
 
 export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
+    // A paired runtime cannot attest a desktop's direct SSH authority.
+    listLineageForHost: async ({ executionHostId }) => ({
+      authoritative: false,
+      executionHostId,
+      reason: 'rejected'
+    }),
     // Older hosts return method_not_found; empty retired names preserve suggestions without blocking create.
     listRetiredNames: async ({ repoId }) => {
       try {

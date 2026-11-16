@@ -7,10 +7,8 @@ import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/re
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
-import {
-  SshHostNotServedError,
-  SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE
-} from '../../../providers/ssh-host-not-served-error'
+import { resolveWorktreeRemovalRoute } from '../../../workspaces/removal/worktree-removal-execution-host-route'
+import { executeSshWorktreeRemoval } from './execute-ssh-worktree-removal'
 import { resolveWorktreeRemovalMetadata } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import {
   authorizeUnregisteredWindowsRemoval,
@@ -56,8 +54,9 @@ export async function executeWorktreeRemoval(
     return removeFolderWorkspace(context, args, repo, repoId, removalHostId)
   }
   assertRemovalHostMatchesRepoRow(repo, repoId, removalHostId)
-  if (repo.connectionId) {
-    throw new SshHostNotServedError(repo.connectionId, SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE)
+  const removalRoute = resolveWorktreeRemovalRoute(removalHostId)
+  if (removalRoute.kind === 'ssh') {
+    return executeSshWorktreeRemoval(context, args, repo, worktreePath, removalRoute)
   }
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0

@@ -11,7 +11,7 @@ function currentAppPath(): string | undefined {
   }
 }
 
-/** WSL guest bundles are never uploaded to SSH hosts. */
+/** Resolve platform-specific SSH relay and WSL guest artifacts from the same packaged layout. */
 export function relayBundleCandidates(
   platform: RelayPlatform | 'wsl',
   appPath = currentAppPath()

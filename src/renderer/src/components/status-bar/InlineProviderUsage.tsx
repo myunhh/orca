@@ -17,6 +17,7 @@ import { getUsageRosterRowState } from './usage-roster-row-state'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
+import { hasUsageData } from '../../../../shared/usage-provider-windows'
 
 const RESET_UNIT_FORMATS: Record<'minute' | 'hour' | 'day', Intl.NumberFormatOptions> = {
   minute: { style: 'unit', unit: 'minute', unitDisplay: 'short' },
@@ -143,14 +144,8 @@ export function InlineUsageBars({
   )
 }
 
-export function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
-  return (
-    limits?.status === 'error' &&
-    !limits.session &&
-    !limits.weekly &&
-    !limits.fableWeekly &&
-    !limits.monthly
-  )
+export function isSignedOutInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
+  return Boolean(limits && getUsageRosterRowState(limits, hasUsageData(limits)).kind === 'sign-in')
 }
 
 export function InlineUsageSignInAction({

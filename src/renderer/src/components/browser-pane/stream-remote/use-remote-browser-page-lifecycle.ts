@@ -14,6 +14,7 @@ import type { BrowserPage as BrowserPageState } from '../../../../../shared/brow
 import { browserPageExists } from '../describe-page/browser-page-load-error'
 import {
   REMOTE_BROWSER_STREAM_IDLE,
+  remoteBrowserStreamNotice,
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
 import {
@@ -23,6 +24,7 @@ import {
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
 import { subscribeRuntimeEnvironment } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import { reportWorkbenchBrowserNotice } from '@/components/workbench-window/bridge/workbench-browser-presentation'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -103,6 +105,10 @@ export function useRemoteBrowserPageLifecycle({
       getDeviceScaleFactor: getRemoteBrowserDeviceScaleFactor,
       setStatus: (status) => {
         setStreamStatus(status)
+        reportWorkbenchBrowserNotice(
+          currentBrowserTabIdRef.current,
+          remoteBrowserStreamNotice(status)
+        )
         // Every transition invalidates the pane notice; stale direct feedback would outrank the stream’s failure beside Reconnect.
         setPaneNotice(null)
       },

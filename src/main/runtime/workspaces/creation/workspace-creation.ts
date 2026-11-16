@@ -13,16 +13,17 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { notifyLineageRepos } from '../../../workspaces/catalog/worktree-lineage-change-notification'
 import { resolveWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
 import { ExecutionHostNotDispatchableError } from '../../../providers/execution-host-provider-dispatch'
-import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
+import { requireSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
+import { createRuntimeSshManagedWorktree } from './runtime-ssh-worktree-create'
+import { prepareRuntimeSshWorktreeSetup } from './runtime-ssh-worktree-setup'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
-import {
-  buildRuntimeSetupReceipt,
-  prepareRuntimeLocalWorktreeSetup
-} from './runtime-local-worktree-setup'
+import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
+import { buildRuntimeWorktreeStartupResult } from './runtime-worktree-startup-result'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
 import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
@@ -161,48 +162,64 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       throw new ExecutionHostNotDispatchableError(createRoute.hostId)
     }
     const timing = events.begin(repo.path)
-    if (createRoute.kind === 'ssh') {
-      // Tagged before the refusal so the failed-create event keeps naming its host.
-      timing.recordExecutionHost('ssh')
-      throw new SshHostNotServedError(createRoute.connectionId)
+    const onMetadataPersisted = (persistedWorktree: Worktree) => {
+      onWorkspaceCreated(persistedWorktree.id)
+      return this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
     }
-    const localCreate = await createRuntimeLocalManagedWorktree({
-      request: args,
-      repo,
-      store: this.requireStore(),
-      createdWithAgent: effectiveCreatedWithAgent,
-      hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
-      resolveRemoteTrackingBase: (path, base, ...options) =>
-        this.resolveRemoteTrackingBase(path, base, ...options),
-      hasRemoteTrackingRef: (path, base, ...options) =>
-        this.hasRemoteTrackingRef(path, base, ...options),
-      refreshRemoteTrackingBase: (path, base, ...options) =>
-        this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
-      fetchRemote: (path, remote, ...options) =>
-        this.fetchRemoteWithCache(path, remote, ...options),
-      onWorktreeMetadataPersisted: (persistedWorktree) => {
-        onWorkspaceCreated(persistedWorktree.id)
-        return this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
-      },
-      rearm,
-      timing
-    })
+    const localCreate =
+      createRoute.kind === 'ssh'
+        ? await createRuntimeSshManagedWorktree({
+            request: { ...args, createdWithAgent: effectiveCreatedWithAgent },
+            repo: { ...repo, connectionId: createRoute.connectionId },
+            connectionId: createRoute.connectionId,
+            store,
+            onWorktreeMetadataPersisted: onMetadataPersisted,
+            timing
+          })
+        : await createRuntimeLocalManagedWorktree({
+            request: args,
+            repo,
+            store: this.requireStore(),
+            createdWithAgent: effectiveCreatedWithAgent,
+            hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
+            resolveRemoteTrackingBase: (path, base, ...options) =>
+              this.resolveRemoteTrackingBase(path, base, ...options),
+            hasRemoteTrackingRef: (path, base, ...options) =>
+              this.hasRemoteTrackingRef(path, base, ...options),
+            refreshRemoteTrackingBase: (path, base, ...options) =>
+              this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
+            fetchRemote: (path, remote, ...options) =>
+              this.fetchRemoteWithCache(path, remote, ...options),
+            onWorktreeMetadataPersisted: onMetadataPersisted,
+            rearm,
+            timing
+          })
     const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
       localCreate
     const { lineage, workspaceLineage } = metadataResult
 
-    const preparedSetup = await prepareRuntimeLocalWorktreeSetup({
-      request: args,
-      repo,
-      worktreePath,
-      settings: createSettings,
-      runtimeTarget: this.getLocalGitExecutionOptionArgs(repo)[0],
-      shouldUseSetupRunner: this.canUseSetupRunner(effectiveStartup),
-      warning:
-        [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
-    })
-    const { setup, defaultTabs, setupTrustMismatch } = preparedSetup
-    let { warning } = preparedSetup
+    const createWarning =
+      [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
+    const preparedSetup =
+      createRoute.kind === 'ssh'
+        ? await prepareRuntimeSshWorktreeSetup({
+            request: args,
+            repo,
+            worktreePath,
+            provider: requireSshGitProvider(createRoute.connectionId),
+            fs: requireSshFilesystemProvider(createRoute.connectionId),
+            warning: createWarning
+          })
+        : await prepareRuntimeLocalWorktreeSetup({
+            request: args,
+            repo,
+            worktreePath,
+            settings: createSettings,
+            runtimeTarget: this.getLocalGitExecutionOptionArgs(repo)[0],
+            shouldUseSetupRunner: this.canUseSetupRunner(effectiveStartup),
+            warning: createWarning
+          })
+    const { setup, defaultTabs, warning } = preparedSetup
 
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
@@ -210,17 +227,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     invalidateAuthorizedRootsCacheForRepo(store, repo)
 
     notifyLineageRepos(this.notifyWorktreesChanged.bind(this), repo.id, lineage?.parentWorktreeId)
-    const {
-      warning: terminalWarning,
-      returnedSetup,
-      didSpawnSetup,
-      didSpawnStartup,
-      setupTerminalHandle,
-      startupTerminalHandle,
-      startupTerminalTabId,
-      startupTerminalPaneKey,
-      startupTerminalPtyId
-    } = await startRuntimeLocalWorktreeTerminals({
+    const started = await startRuntimeLocalWorktreeTerminals({
       request: args,
       repo,
       worktree,
@@ -235,7 +242,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning,
       ports: this.localWorktreeTerminalPorts(args, activationCallbacks.local, worktree)
     })
-    warning = terminalWarning
     this.emitWorktreeLifecycle({
       kind: 'created',
       worktreeId: worktree.id,
@@ -252,37 +258,13 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         git: created
       },
       ...(lineageInput ? metadataResult : {}),
-      ...(returnedSetup ? { setup: returnedSetup } : {}),
-      ...(args.awaitTerminalProvisioning
-        ? {
-            setupReceipt: buildRuntimeSetupReceipt(
-              preparedSetup,
-              didSpawnSetup,
-              setupTerminalHandle
-            )
-          }
-        : {}),
-      ...(defaultTabs ? { defaultTabs } : {}),
-      ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
-      ...(warning ? { warning } : {}),
+      ...buildRuntimeWorktreeStartupResult({ request: args, prepared: preparedSetup, started }),
       ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
       ...(addResult.localBaseRefRefresh
         ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
         : {}),
       ...(addResult.localBaseRefUpdateSuggestion
         ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
-        : {}),
-      ...(didSpawnStartup && startupTerminalHandle
-        ? {
-            startupTerminal: {
-              spawned: true,
-              handle: startupTerminalHandle,
-              ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
-              ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
-              ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
-              surface: 'background' as const
-            }
-          }
         : {})
     }
   }

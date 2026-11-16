@@ -19,6 +19,7 @@ import {
   discoverModelsLocal,
   type CommitMessageModelDiscoveryLocalOptions
 } from './commit-message-model-discovery'
+import { discoverModelsRemote } from './remote-commit-message-model-discovery'
 import { discoverModelsWithHostCache } from './model-discovery-host-cache'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
 import { generateConversationName } from './conversation-name-generation-request'
@@ -40,6 +41,7 @@ import type {
   RemoteCommitMessageExecResult,
   TextGenerationOperation
 } from './source-control-text-generation-types'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 
 export type GenerateCommitMessageParams = ResolvedSourceControlAiGenerationParams
 export type {
@@ -114,6 +116,19 @@ export function discoverCommitMessageModelsLocal(
       spawnAgent: spawnSourceControlAgent
     })
   )
+}
+
+export function discoverCommitMessageModelsRemote(
+  agentId: TuiAgent,
+  cwd: string,
+  execute: (
+    plan: CommitMessagePlan,
+    cwd: string,
+    timeoutMs: number
+  ) => Promise<RemoteCommitMessageExecResult>,
+  agentCommandOverride?: string
+): Promise<DiscoverCommitMessageModelsResult> {
+  return discoverModelsRemote({ agentId, cwd, execute, agentCommandOverride })
 }
 
 export function cancelGenerateCommitMessageLocal(cwd: string): void {

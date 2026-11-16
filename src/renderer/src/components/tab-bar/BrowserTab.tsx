@@ -40,6 +40,7 @@ import {
 } from '../browser-pane/agent-cursor/browser-agent-activity-state'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { MoveTabToNewWindowMenuItem } from './MoveTabToNewWindowMenuItem'
 import { useAppStore } from '@/store/index'
 
 export function formatBrowserTabUrlLabel(url: string, t: Translate = translate): string {
@@ -311,6 +312,7 @@ export default function BrowserTab({
             {toggleAudioMutedLabel}
           </ContextMenuItem>
         ) : null}
+        <MoveTabToNewWindowMenuItem menuKind="context" unifiedTabId={dragData.unifiedTabId} />
         <CopyTabIdMenuItem menuKind="context" unifiedTabId={dragData.unifiedTabId} />
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>

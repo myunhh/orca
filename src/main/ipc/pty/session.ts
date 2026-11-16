@@ -19,6 +19,8 @@ import {
 } from './delivery/pty-hidden-delivery-gate'
 import type { CodexHomePtySpawnedLifecycleArgs, PrepareCodexSessionResume } from './host-env/types'
 import { tryGetProviderForPty } from './provider/registry'
+import type { SshPtyOutputIntake } from '../ssh-pty-output-intake'
+import type { LegacySshProjectionSemantics } from '../ssh-pty-legacy-projection'
 
 export type PtyDataPayload = {
   id: string
@@ -37,6 +39,11 @@ export type RendererPtyDeliveryAccounting = {
   ackedChars: number
   lastSendAtMs: number
   lastAckAtMs: number | null
+  projectionAccountingRanges?: {
+    start: number
+    end: number
+    projectionAdmissionIds: readonly string[]
+  }[]
 }
 
 export type SerializeResult = {
@@ -74,6 +81,7 @@ export type PtyIpcSession = {
   getSettings?: () => GlobalSettings
   options?: PtyIpcSessionOptions
   pendingData: PtyPendingDataDrainQueue
+  sshOutputIntake: SshPtyOutputIntake | null
   rendererExitingPtyIds: Set<string>
   rendererCreditBeforeExitByPty: Map<string, boolean>
   rendererDeliveryRestoreNeededPtys: Set<string>
@@ -103,6 +111,7 @@ export type PtyIpcSession = {
   lastHiddenDropContradictionWarnAtMs: number
   pendingDataDropWarnedPtys: Set<string>
   producerFlowControl: PtyProducerFlowController
+  sourceCreditPendingPtys: Set<string>
   backgroundedDeliverySyncByPty: Map<string, boolean>
   syntheticKillExitPtyIds: Map<
     string,
@@ -116,7 +125,11 @@ export type PtyIpcSession = {
   canSendPtyDataToRenderer: (id: string, options?: { interactive?: boolean }) => boolean
   schedulePendingDataFlush: (delayMs: number) => void
   flushPendingData: () => void
-  sendPtyDataToRenderer: (id: string, payload: PtyDataPayload) => boolean
+  sendPtyDataToRenderer: (
+    id: string,
+    payload: PtyDataPayload,
+    projectionAdmissionIds?: readonly string[]
+  ) => boolean
   sendModelRestoreNeededMarker: (
     id: string,
     reason: PtyModelRestoreReason,
@@ -138,8 +151,19 @@ export type PtyIpcSession = {
       sequenceChars?: number
       transformed?: boolean
     },
-    outputSeq: number | undefined
+    outputSeq: number | undefined,
+    projection?: LegacySshProjectionSemantics
   ) => void
+  preparePtyExitForRenderer: (payload: {
+    id: string
+    code: number
+    incarnationId?: string
+  }) => (() => void) | null
+  finalizePtyExitForRenderer: (payload: {
+    id: string
+    code: number
+    incarnationId?: string
+  }) => void
   sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
   sendPtySpawnedToRenderer: (id: string) => void
   requestSerializedBuffer: (
@@ -190,6 +214,7 @@ export function createPtyIpcSession(args: {
     getSettings: args.getSettings,
     options: args.options,
     pendingData: undefined as unknown as PtyPendingDataDrainQueue,
+    sshOutputIntake: null,
     rendererExitingPtyIds: new Set(),
     rendererCreditBeforeExitByPty: new Map(),
     rendererDeliveryRestoreNeededPtys: new Set(),
@@ -222,6 +247,7 @@ export function createPtyIpcSession(args: {
       pauseProducer: (id) => tryGetProviderForPty(id)?.pauseProducer?.(id),
       resumeProducer: (id) => tryGetProviderForPty(id)?.resumeProducer?.(id)
     }),
+    sourceCreditPendingPtys: new Set(),
     backgroundedDeliverySyncByPty: new Map(),
     syntheticKillExitPtyIds: new Map(),
     retiredRejectedPtyIds: new Map(),
@@ -241,6 +267,8 @@ export function createPtyIpcSession(args: {
     clearDispatcherReadyWatchdog: unsetSessionFn,
     armDispatcherReadyWatchdog: unsetSessionFn,
     acceptPtyDataForRenderer: unsetSessionFn,
+    preparePtyExitForRenderer: unsetSessionFn,
+    finalizePtyExitForRenderer: unsetSessionFn,
     sendPtyExitToRenderer: unsetSessionFn,
     sendPtySpawnedToRenderer: unsetSessionFn,
     requestSerializedBuffer: unsetSessionFn,

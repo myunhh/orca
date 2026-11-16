@@ -15,6 +15,8 @@ export type PendingPtyData = {
   droppedMode2031ScanState?: Mode2031ReplyScanState
   /** Preserve synchronized-output state across dropped bytes, including a lost closing escape that would hold rendering. */
   droppedSynchronizedOutputState?: SynchronizedOutputLatchState
+  projectionAdmissionIds?: readonly string[]
+  projectionAdmissionsTransferred?: true
 }
 
 export type PtyPendingDataDrainDisposition = 'active' | 'background' | 'blocked'

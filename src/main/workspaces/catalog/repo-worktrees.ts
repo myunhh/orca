@@ -12,6 +12,7 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { WorktreeCatalogUnavailableError } from '../../../shared/worktree/worktree-catalog-availability'
+import { requireSshGitProvider } from '../../providers/ssh-git-dispatch'
 
 type LocalRepoWorktreeListOptions = {
   wslDistro?: string
@@ -83,6 +84,15 @@ async function listRoutedRepoWorktrees(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
+  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+  if (route.kind === 'ssh') {
+    return preserveFolderUpgradeWorktreePath(
+      repo,
+      await requireSshGitProvider(route.connectionId).listWorktrees(repo.path, {
+        signal: options?.signal
+      })
+    )
+  }
   assertLocalGitRoute(repo)
   const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listLocal(repo.path, options)
@@ -97,6 +107,15 @@ export async function listRepoWorktreeGraph(
 ): Promise<GitWorktreeInfo[]> {
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
+  }
+  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+  if (route.kind === 'ssh') {
+    return preserveFolderUpgradeWorktreePath(
+      repo,
+      await requireSshGitProvider(route.connectionId).listWorktrees(repo.path, {
+        signal: options?.signal
+      })
+    )
   }
   assertLocalGitRoute(repo)
   const worktrees = hasLocalRepoWorktreeListOptions(options)

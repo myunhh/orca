@@ -6,6 +6,7 @@ import { ipcMain } from 'electron'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { HostedReviewProvider } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { PullRequestDraftContext } from '../../../shared/source-control/ai/generation/pull-request-generation'
 import {
   cancelGeneratePullRequestFieldsLocal,
   generatePullRequestFieldsFromContext,
@@ -15,7 +16,7 @@ import {
 import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/source-control/ai/generation/commit-message-host-key'
 import { getPullRequestDraftContext } from '../../text-generation/pull-request-context'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
-import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
+import { requireSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
@@ -80,7 +81,63 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
         }
       }
       if (args.connectionId) {
-        return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
+        const provider = requireSshGitProvider(args.connectionId)
+        const issueMeta = resolveSourceControlAiLinkedIssueMeta(store, args)
+        const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
+          meta: issueMeta,
+          provider: args.provider,
+          repoPath: args.worktreePath,
+          connectionId: args.connectionId
+        })
+        void linkedIssueDetailsPromise.catch(() => undefined)
+        let context: PullRequestDraftContext | null
+        try {
+          const currentBody = await resolveHostedReviewBodyForGeneration({
+            body: args.body,
+            repoPath: args.worktreePath,
+            connectionId: args.connectionId,
+            provider: args.provider,
+            useTemplate: args.useTemplate
+          })
+          context = await getPullRequestDraftContext(
+            (argv, options) =>
+              provider.exec(
+                argv,
+                args.worktreePath,
+                options?.timeoutMs === undefined && options?.timeout === undefined
+                  ? {}
+                  : { timeoutMs: options?.timeoutMs ?? options?.timeout }
+              ),
+            {
+              base: args.base,
+              currentTitle: args.title,
+              currentBody,
+              currentDraft: args.draft
+            }
+          )
+        } catch (error) {
+          return {
+            success: false,
+            error:
+              error instanceof Error ? error.message : 'Failed to prepare branch for PR details.'
+          }
+        }
+        if (!context) {
+          return { success: false, ...textGenerationFailure('noBranchChanges') }
+        }
+        const linkedIssueDetails = await linkedIssueDetailsPromise
+        context = {
+          ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+          ...(args.provider ? { provider: args.provider } : {}),
+          ...(linkedIssueDetails ? { linkedIssueDetails } : {})
+        }
+        return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
+          kind: 'remote',
+          cwd: args.worktreePath,
+          execute: (plan, cwd, timeoutMs, operation) =>
+            provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
+          missingBinaryLocation: 'remote PATH'
+        })
       }
 
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
@@ -98,7 +155,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
       })
       // Preparation can return before this lookup settles; retain its error for the later await.
       void linkedIssueDetailsPromise.catch(() => undefined)
-      let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
+      let context: PullRequestDraftContext | null
       try {
         const currentBody = await resolveHostedReviewBodyForGeneration({
           body: args.body,
@@ -158,6 +215,10 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
     'git:cancelGeneratePullRequestFields',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
+        await requireSshGitProvider(args.connectionId).cancelGenerateCommitMessage(
+          args.worktreePath,
+          'pull-request-fields'
+        )
         return
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)

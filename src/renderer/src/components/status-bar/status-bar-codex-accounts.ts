@@ -44,7 +44,7 @@ export function normalizeCodexStatusRuntimeTarget(
 }
 
 export function getCodexStatusActiveId(
-  state: CodexRateLimitAccountsState,
+  state: Pick<CodexRateLimitAccountsState, 'activeAccountId' | 'activeAccountIdsByRuntime'>,
   target: CodexStatusRuntimeTarget
 ): string | null {
   const selection = state.activeAccountIdsByRuntime

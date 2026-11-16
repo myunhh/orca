@@ -10,10 +10,11 @@ import { normalizeRuntimeRelativePath } from '../../files/paths/runtime-relative
 import {
   localGitOptionsForTarget,
   normalizeRuntimeGitRelativePath,
-  requireLocalRuntimeGitRoute,
   requireRuntimeGitProvider,
+  runtimeGitRouteForTarget,
   type RuntimeGitCommandHost
 } from './runtime-git-command-target'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 
 export class RuntimeGitDiffCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
@@ -71,7 +72,23 @@ export class RuntimeGitDiffCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const oldRelativePath = oldPath ? normalizeRuntimeGitRelativePath(oldPath) : undefined
-    requireLocalRuntimeGitRoute(target)
+    const route = runtimeGitRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      const diffs = await requireSshGitProvider(route.connectionId).getBranchDiff(
+        target.worktree.path,
+        compare.mergeBase,
+        {
+          includePatch: true,
+          filePath: relativePath,
+          oldPath: oldRelativePath,
+          headOid: compare.headOid
+        }
+      )
+      if (!diffs[0]) {
+        throw new Error('Requested branch diff is no longer available')
+      }
+      return assertGitDiffWithinTransportBudget(diffs[0], maxContentBytes)
+    }
     return assertGitDiffWithinTransportBudget(
       await getBranchDiff(
         target.worktree.path,

@@ -53,10 +53,9 @@ export function swapReplacedPaneBinding(
   replaced: ReplacedPaneOwner
 ): () => PersistPtyBindingArgs | null {
   return () => {
-    const bound =
-      store.getWorkspaceSession().terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[
-        binding.leafId
-      ]
+    const bound = store.getWorkspaceSession(replaced.pane?.hostId).terminalLayoutsByTabId?.[
+      binding.tabId
+    ]?.ptyIdsByLeafId?.[binding.leafId]
     // Unbound is ok: the renderer's pre-connect clear can withdraw it (split tab).
     if (bound !== undefined && bound !== replaced.ptyId) {
       return null

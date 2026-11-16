@@ -2,7 +2,11 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import {
+  getSshFilesystemProvider,
+  requireSshFilesystemProvider
+} from '../providers/ssh-filesystem-dispatch'
+import { joinWorktreeRelativePath } from '../runtime/files/paths/runtime-relative-paths'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
 import {
@@ -37,8 +41,43 @@ export async function saveClipboardImageBufferAsTempFile(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
 
-  if (args?.connectionId) {
-    throw new SshHostNotServedError(args.connectionId)
+  if (args?.connectionId != null) {
+    const connectionId = args.connectionId
+    const provider = requireSshFilesystemProvider(connectionId)
+    if (!provider.getTempDir) {
+      throw new Error('Clipboard image uploads require a newer SSH relay')
+    }
+    const folder = await provider.getTempDir()
+    const directory = joinWorktreeRelativePath(folder, `orca-paste-${randomUUID()}`)
+    await provider.createDirNoClobber(directory)
+    const fileName = args.fileName
+      ? shellInertFileName(args.fileName)
+      : agentSessionPastedImageName(
+          Date.now(),
+          randomUUID(),
+          detectImageFileSignature(buffer)?.extension
+        )
+    const remotePath = joinWorktreeRelativePath(directory, fileName)
+    try {
+      await provider.createFile(remotePath)
+      for (let offset = 0; offset < buffer.length; offset += 512 * 1024) {
+        if (getSshFilesystemProvider(connectionId) !== provider) {
+          throw new Error('SSH clipboard connection changed')
+        }
+        await provider.writeFileBase64Chunk(
+          remotePath,
+          buffer.subarray(offset, offset + 512 * 1024).toString('base64'),
+          true
+        )
+      }
+      if (getSshFilesystemProvider(connectionId) !== provider) {
+        throw new Error('SSH clipboard connection changed')
+      }
+      return remotePath
+    } catch (error) {
+      await provider.deletePath(directory, true).catch(() => undefined)
+      throw error
+    }
   }
 
   // Composer drafts must restore pastes after restart; terminal/editor/phone pastes use OS temp.

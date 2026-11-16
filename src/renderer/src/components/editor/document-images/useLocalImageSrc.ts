@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from 'react'
+import { createContext, useContext, useEffect, useEffectEvent, useState } from 'react'
 import { resolveImageAbsolutePath } from '../markdown/link-routing/markdown-preview-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { readLocalImagePreview } from './local-image-src-reader'
@@ -14,6 +14,11 @@ import {
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
 import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+
+export const LocalImageSourceContext = createContext<{
+  key: string
+  load: (rawSrc: string, filePath: string) => Promise<string | null>
+} | null>(null)
 
 export function getLocalImageCacheKey(
   absolutePath: string,
@@ -92,12 +97,20 @@ export function useLocalImageSrc(
   access?: LocalFileAccess,
   retryKey?: number
 ): string | undefined {
+  const source = useContext(LocalImageSourceContext)
   const [generation, setGeneration] = useState(getLocalImageCacheGeneration())
   const externalSrc =
-    rawSrc && runtimeContext !== null && isExternalUrl(rawSrc) ? rawSrc : undefined
+    rawSrc && (source || runtimeContext !== null) && isExternalUrl(rawSrc) ? rawSrc : undefined
   // Key leases by semantic identity; equal rebuilt context objects must not revoke a still-displayed image URL.
-  const cacheKey = getLocalImageSrcCacheKey(rawSrc, filePath, connectionId, runtimeContext, access)
+  const cacheKey = source
+    ? rawSrc && !isExternalUrl(rawSrc)
+      ? `${source.key}\0${filePath}\0${rawSrc}`
+      : null
+    : getLocalImageSrcCacheKey(rawSrc, filePath, connectionId, runtimeContext, access)
   const readImage = useEffectEvent((): Promise<string | null> => {
+    if (source && rawSrc) {
+      return source.load(rawSrc, filePath)
+    }
     if (rawSrc && readBrowserAttachmentFile(rawSrc)) {
       return loadLocalImageAbsolutePath(rawSrc)
     }
@@ -108,12 +121,12 @@ export function useLocalImageSrc(
   })
 
   useEffect(() => {
-    if (!cacheKey) {
+    if (!cacheKey || source) {
       return
     }
     pinLocalImageCache(cacheKey)
     return () => unpinLocalImageCache(cacheKey)
-  }, [cacheKey])
+  }, [cacheKey, source])
 
   useEffect(() => {
     return onImageCacheInvalidated(() => setGeneration(getLocalImageCacheGeneration()))

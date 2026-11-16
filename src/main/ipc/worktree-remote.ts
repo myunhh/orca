@@ -52,6 +52,8 @@ import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/remotes/push-target-validation'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
+import type { SshGitProvider } from '../providers/ssh-git-provider'
+import { assertValidGitPushTarget } from '../../shared/git/remotes/git-push-target-validation'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RemoteFetchResult,
@@ -787,6 +789,132 @@ export async function materializeWorktreePushTargetRemote(
   worktreePushTargetMaterializeInflight.set(key, promise)
   return promise
 }
+const sshPushTargetMaterialization = new WeakMap<
+  SshGitProvider,
+  { inflight: Map<string, Promise<GitPushTarget>>; adoption: Map<string, Promise<unknown>> }
+>()
+
+export async function prepareWorktreePushTargetSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  target: GitPushTarget,
+  store?: WorktreePushTargetStore | null,
+  repoId?: string
+): Promise<GitPushTarget> {
+  assertValidGitPushTarget(target)
+  await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)
+  const hostId = getConnectionExecutionHostId(provider.getConnectionId())
+  return prepareWorktreePushTargetWithExec(
+    (args, cwd) =>
+      provider.exec(
+        args,
+        cwd,
+        args[0] === 'fetch' ? { timeoutMs: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS } : undefined
+      ),
+    repoPath,
+    target,
+    (remoteName) =>
+      store
+        ? isPushTargetRemoteCreatedByKnownWorktree(store, { ...target, remoteName }, repoId, hostId)
+        : false
+  )
+}
+
+export async function materializeWorktreePushTargetRemoteSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  target: GitPushTarget,
+  store?: WorktreePushTargetStore | null,
+  repoId?: string,
+  worktree?: HostWorktreeTarget
+): Promise<GitPushTarget> {
+  const hostId = getConnectionExecutionHostId(provider.getConnectionId())
+  if (worktree && worktree.hostId !== hostId) {
+    throw new Error('Push target worktree belongs to a different execution host.')
+  }
+  assertValidGitPushTarget(target)
+  if (!target.remoteUrl || target.remoteCreated) {
+    return target
+  }
+  let state = sshPushTargetMaterialization.get(provider)
+  if (!state) {
+    state = { inflight: new Map(), adoption: new Map() }
+    sshPushTargetMaterialization.set(provider, state)
+  }
+  const { inflight, adoption } = state
+  const execGit: GitRemoteExec = (args, cwd) =>
+    provider.exec(
+      args,
+      cwd,
+      args[0] === 'fetch' ? { timeoutMs: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS } : undefined
+    )
+  const adopt = () =>
+    runForkRemoteAdoption(
+      repoPath,
+      target,
+      () =>
+        adoptExistingForkRemoteForBranch(
+          execGit,
+          repoPath,
+          target,
+          {},
+          store,
+          repoId,
+          worktree,
+          execGit,
+          hostId
+        ),
+      adoption
+    )
+  if (await remoteAlreadyMatchesUrl(execGit, repoPath, target.remoteName, target.remoteUrl)) {
+    return adopt()
+  }
+  const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
+  const existing = inflight.get(key)
+  if (existing) {
+    await existing
+    return adopt()
+  }
+  const promise = prepareWorktreePushTargetSsh(
+    provider,
+    repoPath,
+    target,
+    store,
+    repoId ?? (worktree ? getRepoIdFromWorktreeId(worktree.id) : undefined)
+  )
+    .then((prepared) => restoreUpstreamAfterMaterialize(execGit, repoPath, prepared))
+    .then((prepared) => {
+      persistMaterializedPushTargetIfCreated(store, worktree, prepared)
+      return prepared
+    })
+    .finally(() => {
+      if (inflight.get(key) === promise) {
+        inflight.delete(key)
+      }
+    })
+  inflight.set(key, promise)
+  return promise
+}
+
+export async function cleanupUnusedWorktreePushTargetRemoteSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  removedWorktree: HostWorktreeTarget,
+  target: GitPushTarget | undefined,
+  store: WorktreePushTargetStore
+): Promise<void> {
+  const hostId = getConnectionExecutionHostId(provider.getConnectionId())
+  if (removedWorktree.hostId !== hostId) {
+    throw new Error('Removed worktree belongs to a different execution host.')
+  }
+  await cleanupUnusedWorktreePushTargetRemoteWithExec(
+    repoPath,
+    removedWorktree.id,
+    target,
+    { getAllWorktreeMeta: () => readAllWorktreeMetaForHost(store, hostId) },
+    (args, cwd) => provider.exec(args, cwd)
+  )
+}
 
 // Remote reuse still needs this branch's refspec, tracking ref and upstream, including after the initial materialization.
 async function adoptExistingForkRemoteForBranch(
@@ -796,7 +924,9 @@ async function adoptExistingForkRemoteForBranch(
   gitOptions: { wslDistro?: string },
   store: WorktreePushTargetStore | null | undefined,
   repoId: string | undefined,
-  worktree: HostWorktreeTarget | undefined
+  worktree: HostWorktreeTarget | undefined,
+  fetchGit?: GitRemoteExec,
+  hostId = worktree?.hostId
 ): Promise<GitPushTarget> {
   await ensureRemoteTracksBranchNarrowly(execGit, repoPath, target.remoteName, target.branchName)
   // Config widening imports no refs; fetch missing tracking refs before upstream assignment while repeat calls stay local.
@@ -804,23 +934,26 @@ async function adoptExistingForkRemoteForBranch(
     !(await forkRemoteTrackingRefExists(execGit, repoPath, target.remoteName, target.branchName))
   ) {
     // Bound this network fetch like the full-mint path.
-    await gitExecFileAsync(
-      [
-        'fetch',
-        target.remoteName,
-        buildNarrowForkFetchRefspec(target.remoteName, target.branchName)
-      ],
-      { cwd: repoPath, ...gitOptions, timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS }
-    )
+    const args = [
+      'fetch',
+      target.remoteName,
+      buildNarrowForkFetchRefspec(target.remoteName, target.branchName)
+    ]
+    await (fetchGit
+      ? fetchGit(args, repoPath)
+      : gitExecFileAsync(args, {
+          cwd: repoPath,
+          ...gitOptions,
+          timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS
+        }))
   }
   const restored = await restoreUpstreamAfterMaterialize(execGit, repoPath, target)
   // Persist inherited Orca ownership for orphan cleanup; derive repo ID because IPC and runtime callers supply different context.
   const ownerRepoId = repoId ?? (worktree ? getRepoIdFromWorktreeId(worktree.id) : undefined)
   const owned =
-    store !== undefined &&
+    store != null &&
     ownerRepoId !== undefined &&
-    // SAFETY: Legacy null keeps this branch's original failure rather than introducing a fallback.
-    isPushTargetRemoteCreatedByKnownWorktree(store!, restored, ownerRepoId, worktree?.hostId)
+    isPushTargetRemoteCreatedByKnownWorktree(store, restored, ownerRepoId, hostId)
   const adopted = owned ? { ...restored, remoteCreated: true } : restored
   persistMaterializedPushTargetIfCreated(store, worktree, adopted)
   return adopted
@@ -832,19 +965,20 @@ const forkRemoteAdoptionQueue = new Map<string, Promise<unknown>>()
 function runForkRemoteAdoption<T>(
   repoPath: string,
   target: GitPushTarget,
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  queue = forkRemoteAdoptionQueue
 ): Promise<T> {
   const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
-  const previous = forkRemoteAdoptionQueue.get(key)
+  const previous = queue.get(key)
   const next = previous ? previous.then(run, run) : run()
   const settled = next.then(
     () => undefined,
     () => undefined
   )
-  forkRemoteAdoptionQueue.set(key, settled)
+  queue.set(key, settled)
   void settled.finally(() => {
-    if (forkRemoteAdoptionQueue.get(key) === settled) {
-      forkRemoteAdoptionQueue.delete(key)
+    if (queue.get(key) === settled) {
+      queue.delete(key)
     }
   })
   return next

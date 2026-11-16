@@ -67,6 +67,7 @@ export type PtySpawnHostEnv = {
 }
 
 type PtySpawnHostEnvArgs = {
+  connectionId?: string | null
   launchAgent: TuiAgent | undefined
   command: string | undefined
   resumeProviderSession: AgentProviderSessionMetadata | undefined
@@ -105,6 +106,21 @@ type PtySpawnHostEnvArgs = {
  * distro it runs in. A passive restore's prep goes through the E9 gates and skips on a stopped one.
  */
 export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise<PtySpawnHostEnv> {
+  if (args.connectionId) {
+    const codexResumeLaunch = args.deps.noCodexResumeLaunch(
+      args.preAdopted ? undefined : args.command
+    )
+    return {
+      codexResumeLaunch,
+      launchCommand: codexResumeLaunch.command,
+      baseEnv: args.env,
+      env: args.env,
+      selectedCodexHomePath: null,
+      codexResumeHomeSelected: false,
+      skipCodexHomeEnv: false,
+      stripInheritedOrcaCodexHome: false
+    }
+  }
   const target = args.codexSelectionTarget
   return runAsWslLaunchUserAct(
     {

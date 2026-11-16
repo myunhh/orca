@@ -11,6 +11,7 @@ import {
   RemotePreviewPairingChangedError,
   readRemotePreviewRange
 } from './remote-file-preview-reader'
+import { readSshPreviewRange } from './ssh-preview-file'
 
 /** pdf.js asks in 256 KiB chunks but may merge neighbours; the renderer splits anything larger. */
 export const PREVIEW_RANGE_READ_MAX_BYTES = 4 * 1024 * 1024
@@ -58,8 +59,19 @@ export async function readPreviewGrantRange(
       lifetime.dispose()
     }
   }
-  if (grant.target.connectionId) {
-    throw new Error('Preview is no longer available')
+  if (grant.target.connectionId != null) {
+    if (!grant.ssh || grant.ssh.connectionId !== grant.target.connectionId) {
+      throw new Error('Preview is no longer available')
+    }
+    const lifetime = abortWhenRendererGone(sender)
+    try {
+      return await readSshPreviewRange(grant.ssh, offset, length, lifetime.signal)
+    } catch (error) {
+      revokeGrant(token)
+      throw error
+    } finally {
+      lifetime.dispose()
+    }
   }
   const { handle, stats } = await openLocalPreviewGrantFile(grant, grant.target, grant.store)
   try {

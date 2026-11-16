@@ -1,3 +1,4 @@
+import { claimSshPaneLease } from './pane/ssh-pane-lease-claim'
 import { readTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtySpawnSizeSeed } from './spawn-options-assembly'
 import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
@@ -119,7 +120,7 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
   const { state } = input
   const { result } = state
   const runtime = state.deps.runtime
-  admitPtySpawnOwnership(runtime, result)
+  admitPtySpawnOwnership(runtime, result, state.args.connectionId)
   if (input.nativeWindowsConptySpawn) {
     markNativeWindowsConptyPty(result.id)
   }
@@ -153,7 +154,7 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
       result,
       result.id,
       registration.worktreeId,
-      null,
+      state.args.connectionId ?? null,
       // Validate pane identity so throttled mobile creation retains its live PTY surface (#7587).
       typeof tabId === 'string' &&
         isValidTerminalTabId(tabId) &&
@@ -203,6 +204,14 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
     )
     state.pendingRegistrationPtyId = null
   }
+  claimSshPaneLease({
+    store: input.paneBinding?.store ?? registration.store,
+    connectionId: state.args.connectionId,
+    ptyId: result.id,
+    worktreeId: registration.worktreeId ?? undefined,
+    tabId: state.args.tabId,
+    leafId: state.metadataLeafId ?? undefined
+  })
   return publishCommittedPtySpawn(input)
 }
 
@@ -225,7 +234,7 @@ async function commitAdoptedAgentSession(
     adoptedResult,
     result.id,
     surface.worktreeId,
-    null,
+    state.args.connectionId ?? null,
     {
       tabId: surface.tabId,
       leafId: surface.leafId,
@@ -238,6 +247,14 @@ async function commitAdoptedAgentSession(
   if (rejectedRegistration) {
     return rejectedRegistration
   }
+  claimSshPaneLease({
+    store: input.registration.store,
+    connectionId: state.args.connectionId,
+    ptyId: result.id,
+    worktreeId: surface.worktreeId,
+    tabId: surface.tabId,
+    leafId: surface.leafId
+  })
   runtime?.noteTerminalSpawnCommit?.(result, input.expectedSourceBinding)
   runtime?.registerPreAllocatedHandleForPty(result.id, surface.terminalHandle)
   state.deps.options?.onCodexHomePtySpawned?.({

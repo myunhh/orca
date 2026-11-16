@@ -94,6 +94,7 @@ export function MoveTabToWorkbenchWindowSubmenu({
   const detachedWindowIdByTabId = useAppStore((state) => state.detachedWindowIdByTabId)
   const unifiedTabsByWorktree = useAppStore((state) => state.unifiedTabsByWorktree)
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
+  const browserTabsByWorktree = useAppStore((state) => state.browserTabsByWorktree)
   const openFiles = useAppStore((state) => state.openFiles)
   const settings = useAppStore((state) => state.settings)
   const entries = useWorkbenchWindowEntries()
@@ -103,6 +104,7 @@ export function MoveTabToWorkbenchWindowSubmenu({
       detachedWindowIdByTabId,
       unifiedTabsByWorktree,
       tabsByWorktree,
+      browserTabsByWorktree,
       openFiles,
       settings
     })
@@ -118,6 +120,7 @@ export function MoveTabToWorkbenchWindowSubmenu({
     detachedWindowIdByTabId,
     unifiedTabsByWorktree,
     tabsByWorktree,
+    browserTabsByWorktree,
     openFiles,
     settings,
     unifiedTabId

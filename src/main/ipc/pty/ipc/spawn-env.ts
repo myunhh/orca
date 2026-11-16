@@ -5,9 +5,7 @@ import {
 } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
-import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
-import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
 import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
 import { selectWindowJcodeRuntimeDir, stampPtySpawnPaneEnv } from '../spawn-pane-env'
@@ -56,6 +54,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   ctx.baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
   const shouldRefreshAgentTeamsEnv =
     !ctx.preAdoptedStablePane &&
+    !args.connectionId &&
     ctx.deps.runtime !== undefined &&
     ctx.stablePaneKey !== null &&
     shouldRefreshNativeClaudeAgentTeamsEnv({
@@ -64,10 +63,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     })
   ctx.effectiveLaunchConfig = args.launchConfig
   const shouldPreAllocateTerminalHandle =
-    ctx.deps.runtime !== undefined &&
-    ((!(ctx.provider instanceof LocalPtyProvider) &&
-      !routesFreshSpawnsToLocalProvider(ctx.provider)) ||
-      shouldRefreshAgentTeamsEnv)
+    ctx.deps.runtime !== undefined && (ctx.isDaemonHostSpawn || shouldRefreshAgentTeamsEnv)
   const runtime = ctx.deps.runtime
   ctx.preAllocatedHandle = shouldPreAllocateTerminalHandle
     ? (ctx.preAdoptedStablePane?.owner.handle ??
@@ -95,9 +91,10 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       }
     }
   }
-  ctx.requestedAgentTeamsPath = ctx.baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID
-    ? ctx.baseEnv[resolvePathEnvKey(ctx.baseEnv, process.platform)]
-    : undefined
+  ctx.requestedAgentTeamsPath =
+    !args.connectionId && ctx.baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID
+      ? ctx.baseEnv[resolvePathEnvKey(ctx.baseEnv, process.platform)]
+      : undefined
   ctx.agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv ? ['TERM_PROGRAM'] : undefined
   stampPtySpawnPaneEnv(ctx.baseEnv, {
     // Renderer keys select bookkeeping, while environment identity must name this spawn's actual pane.
@@ -109,7 +106,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
         }
       : null,
     jcodeRuntimeDir:
-      ctx.baseEnv && ctx.stablePaneKey
+      !args.connectionId && ctx.baseEnv && ctx.stablePaneKey
         ? selectWindowJcodeRuntimeDir(ctx.stablePaneKey, ctx.isDaemonHostSpawn)
         : undefined
   })

@@ -2,6 +2,7 @@ import type { CommandSpec } from '../args'
 import { ACCOUNT_COMMAND_SPECS } from './account'
 import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
 import { BROWSER_BASIC_COMMAND_SPECS } from './browser-basic'
+import { RESEARCH_COMMAND_SPECS } from './research'
 import { AUTOMATION_COMMAND_SPECS } from './automations'
 import { CORE_COMMAND_SPECS } from './core'
 import { CHAT_COMMAND_SPECS } from './chat'
@@ -45,6 +46,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...AUTOMATION_COMMAND_SPECS,
   ...BROWSER_BASIC_COMMAND_SPECS,
   ...BROWSER_ADVANCED_COMMAND_SPECS,
+  ...RESEARCH_COMMAND_SPECS,
   ...ORCHESTRATION_COMMAND_SPECS.map(withFullRecordFlag),
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,

@@ -55,11 +55,12 @@ export function consumeSyntheticKillExit(
   return true
 }
 
-function preparePtyExitForRenderer(
+export function preparePtyExitForRenderer(
   session: PtyIpcSession,
   payload: { id: string; code: number; incarnationId?: string }
 ): (() => void) | null {
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
+    session.sshOutputIntake?.transferPtyProjections(payload.id, 'renderer-destroyed')
     return () => {}
   }
   if (session.rendererExitingPtyIds.has(payload.id)) {
@@ -100,7 +101,8 @@ function preparePtyExitForRenderer(
             remaining.rawLength,
             remaining.transformed,
             remaining.startEscapeBoundary
-          )
+          ),
+          remaining.projectionAdmissionIds
         )
       }
     }
@@ -111,7 +113,7 @@ function preparePtyExitForRenderer(
   }
 }
 
-function finalizePtyExitForRenderer(
+export function finalizePtyExitForRenderer(
   session: PtyIpcSession,
   payload: { id: string; code: number; incarnationId?: string }
 ): void {
@@ -125,6 +127,7 @@ function finalizePtyExitForRenderer(
   session.rendererCreditBeforeExitByPty.delete(payload.id)
   // Release pause bookkeeping so reused IDs cannot inherit it.
   session.producerFlowControl.release(payload.id)
+  session.sourceCreditPendingPtys.delete(payload.id)
   session.pendingOverflowMarkedPtys.delete(payload.id)
   session.rendererDeliveryRestoreNeededPtys.delete(payload.id)
   lastInputAtByPty.delete(payload.id)

@@ -5,16 +5,22 @@ import type {
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import { preservedBranchCleanupScopeKey } from '../../../shared/git/branches/preserved-branch-cleanup'
 import {
-  getRepoRoutingConnectionId,
+  getRepoDialableSshTargetId,
+  getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { forceDeleteLocalBranch } from '../../git/worktrees/removal/worktree-branch-removal'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../ipc/worktree-remote'
+import {
+  cleanupUnusedWorktreePushTargetRemote,
+  cleanupUnusedWorktreePushTargetRemoteSsh
+} from '../../ipc/worktree-remote'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
+import { requireSshGitProvider } from '../../providers/ssh-git-dispatch'
+import { ExecutionHostNotDispatchableError } from '../../providers/execution-host-provider-dispatch'
+import { hostWorktreeTargetForRepo } from '../../persistence/host-qualified-worktree-meta'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { resolveWorktreeRemovalRepoOwner } from '../../workspaces/removal/worktree-removal-repo-owner'
@@ -129,9 +135,23 @@ export class RuntimePreservedBranchCleanup {
       throw new Error('Folder workspaces do not have local Git branches.')
     }
 
-    const sshTargetId = getRepoRoutingConnectionId(repo)
+    const ownerHost = getRepoExecutionHostId(repo)
+    if (parseExecutionHostId(ownerHost)?.kind === 'runtime') {
+      throw new ExecutionHostNotDispatchableError(ownerHost)
+    }
+    const sshTargetId = getRepoDialableSshTargetId(repo)
     if (sshTargetId) {
-      throw new SshHostNotServedError(sshTargetId)
+      const provider = requireSshGitProvider(sshTargetId)
+      await provider.forceDeletePreservedBranch(repo.path, target.branchName, target.head)
+      await cleanupUnusedWorktreePushTargetRemoteSsh(
+        provider,
+        repo.path,
+        hostWorktreeTargetForRepo(removalTarget.id, repo),
+        target.pushTarget,
+        store
+      )
+      this.delete(removalTarget.id, target.hostId)
+      return { deleted: true }
     }
     const options = getLocalProjectWorktreeGitOptions(store, repo)
     await (Object.keys(options).length > 0

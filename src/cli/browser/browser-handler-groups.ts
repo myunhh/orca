@@ -3,6 +3,12 @@ import type { HandlerGroup } from '../handler-group-manifest'
 
 export const BROWSER_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'chatgpt-research',
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['chatgpt-research'],
+    // Keep filesystem and browser handler dependencies behind the dispatch registry's lazy boundary.
+    load: async () => (await import('./chatgpt-research.js')).CHATGPT_RESEARCH_HANDLERS
+  },
+  {
     name: 'browser-extension',
     keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-extension'],
     load: async () => (await import('./browser-extension.js')).BROWSER_EXTENSION_HANDLERS

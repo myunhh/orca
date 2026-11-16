@@ -11,6 +11,7 @@ import { validateFullGitObjectId } from '../access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
@@ -28,6 +29,13 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
         admissionTier?: GitAdmissionTier
       }
     ): Promise<GitBranchCompareResult> => {
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).getBranchCompare(
+          args.worktreePath,
+          args.baseRef,
+          args.admissionTier ? { admissionTier: args.admissionTier } : undefined
+        )
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       // A 30 s poll while Source Control shows the branch: its Git would boot a stopped WSL distro (E9).
       await assertWslUncPathRunning(args.worktreePath)
@@ -52,6 +60,12 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
       args: { worktreePath: string; commitId: string; connectionId?: string }
     ): Promise<GitCommitCompareResult> => {
       const commitId = validateFullGitObjectId(args.commitId, 'commitId')
+      if (args.connectionId) {
+        return requireSshGitProvider(args.connectionId).getCommitCompare(
+          args.worktreePath,
+          commitId
+        )
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(

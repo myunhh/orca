@@ -1,4 +1,4 @@
-// Preserve legacy relay directories until the relay-era upgrade window closes.
+// Each collector admits only its own install model and positively idle version directories.
 import type { RemoteInstallTransport } from './remote-install-transport'
 import { RELAY_REMOTE_DIR } from './remote-install-root'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'

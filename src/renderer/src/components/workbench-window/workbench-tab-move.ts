@@ -5,8 +5,23 @@ import { translate } from '@/i18n/i18n'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import type { TabGroup } from '../../../../shared/tab-types'
 import { WORKBENCH_MAX_TABS } from '../../../../shared/workbench-window/workbench-window-types'
-import { canShowTabInWorkbenchWindow, findUnifiedTab } from './workbench-tab-eligibility'
+import {
+  canShowTabInWorkbenchWindow,
+  findUnifiedTab,
+  workbenchTabMoveRestriction
+} from './workbench-tab-eligibility'
 import { countWorkbenchWindowTabs } from './workbench-window-summaries'
+
+function rejectRestrictedTabs(state: AppState, tabIds: readonly string[]): boolean {
+  for (const tabId of tabIds) {
+    const restriction = workbenchTabMoveRestriction(state, tabId)
+    if (restriction) {
+      toast.error(restriction)
+      return true
+    }
+  }
+  return false
+}
 
 /** What a group shows instead of `unifiedTabId`: the newest MRU tab the main strip shows, then the nearest neighbor. */
 export function mainStripSuccessor(
@@ -50,6 +65,9 @@ export function assignTabsToWorkbenchWindow(
   windowId: string
 ): void {
   const state = useAppStore.getState()
+  if (rejectRestrictedTabs(state, unifiedTabIds)) {
+    return
+  }
   // A preview tab is its group's replaceable slot; the next single-click open would swap it out of the window.
   for (const tabId of unifiedTabIds) {
     const tab = findUnifiedTab(state, tabId)
@@ -71,6 +89,9 @@ export async function moveTabsToNewWorkbenchWindow(
   unifiedTabIds: readonly string[]
 ): Promise<void> {
   const state = useAppStore.getState()
+  if (rejectRestrictedTabs(state, unifiedTabIds)) {
+    return
+  }
   const movable = unifiedTabIds.filter((tabId) => canShowTabInWorkbenchWindow(state, tabId))
   const api = window.api.workbenchWindows
   if (movable.length === 0 || !api) {
@@ -98,6 +119,9 @@ export async function moveTabsToExistingWorkbenchWindow(
   windowId: string
 ): Promise<void> {
   const api = window.api.workbenchWindows
+  if (rejectRestrictedTabs(useAppStore.getState(), unifiedTabIds)) {
+    return
+  }
   const movable = unifiedTabIds.filter((tabId) =>
     canShowTabInWorkbenchWindow(useAppStore.getState(), tabId)
   )
@@ -107,6 +131,9 @@ export async function moveTabsToExistingWorkbenchWindow(
   const openWindows = await api.listWindows().catch(() => [])
   // Re-read after the await: the tab may have closed or moved meanwhile.
   const state = useAppStore.getState()
+  if (rejectRestrictedTabs(state, movable)) {
+    return
+  }
   const stillMovable = movable.filter(
     (tabId) =>
       canShowTabInWorkbenchWindow(state, tabId) && state.detachedWindowIdByTabId[tabId] !== windowId

@@ -31,8 +31,7 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import { addLocalRepoFromPath } from './local-repo-registration'
-import { sshHostWithoutServerMessage } from '../../../shared/project-host-setup-target'
-import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
+import { addRemoteRepoFromPath } from './remote-repo-registration'
 import {
   assertWslMoveHostSetupIdWritable,
   assertWslMoveHostSetupWritable
@@ -136,12 +135,11 @@ export function registerProjectHostSetupHandlers(
         parsedHost.kind === 'local'
           ? await addLocalRepoFromPath(store, args.path, args.kind)
           : parsedHost.kind === 'ssh'
-            ? {
-                error: sshHostWithoutServerMessage(
-                  getSshTargetRegistryStore()?.getTarget(parsedHost.targetId)?.label ??
-                    parsedHost.targetId
-                )
-              }
+            ? await addRemoteRepoFromPath(store, {
+                connectionId: parsedHost.targetId,
+                remotePath: args.path,
+                kind: args.kind
+              })
             : {
                 error:
                   'Runtime hosts must be set up through the runtime projectHostSetup.setupExistingFolder RPC.'

@@ -12,7 +12,7 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
   const viewed = isBrowserPageRemotelyViewed(page.identity.browserPageId)
   const blank = page.host.dataset.browserClientPageBlank === 'true'
   const viewport = page.host.ownerDocument.defaultView
-  const interactive = visible && !blank
+  const interactive = visible && !blank && !page.visibleAttachment?.container.closest('[inert]')
   // Chromium needs a sized, onscreen guest to composite even when its desktop pane is hidden.
   const style = {
     left: visible ? `${bounds!.left}px` : viewed ? '0px' : '-10000px',
@@ -27,7 +27,7 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
       : viewed
         ? `${Math.max(240, viewport?.innerHeight ?? 0)}px`
         : '1px',
-    opacity: interactive ? '' : viewed ? '0' : '',
+    opacity: interactive ? '' : visible || viewed ? '0' : '',
     visibility: blank && !viewed ? 'hidden' : '',
     'pointer-events': interactive && !isWebviewDragPassthroughActive() ? 'auto' : 'none'
   }

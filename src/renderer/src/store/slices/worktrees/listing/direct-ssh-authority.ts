@@ -1,6 +1,7 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { DirectSshAuthority } from '../../../../../../shared/ssh-types'
 import type { AppState } from '../../../types'
+import { isAdmissibleDirectSshAuthority } from '../../../../../../shared/ssh-retained-payload-admission'
 
 export function directSshAuthorityIsComplete(
   authority: DirectSshAuthority,
@@ -27,15 +28,19 @@ export function getCurrentDirectSshAuthority(
     return null
   }
   const connection = state.sshConnectionStates?.get(parsedHost.targetId)
-  if (connection?.status !== 'connected') {
+  if (
+    connection?.status !== 'connected' ||
+    connection.targetId !== parsedHost.targetId ||
+    connection.managedServer?.kind === 'managed'
+  ) {
     return null
   }
   const authority = {
     targetId: parsedHost.targetId,
     providerEpoch: connection.providerEpoch,
     connectionGeneration: connection.connectionGeneration
-  } as DirectSshAuthority
-  if (!directSshAuthorityIsComplete(authority, parsedHost.targetId)) {
+  }
+  if (!isAdmissibleDirectSshAuthority(authority)) {
     return null
   }
   return {

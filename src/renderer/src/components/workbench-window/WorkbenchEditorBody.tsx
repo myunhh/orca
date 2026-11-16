@@ -10,6 +10,7 @@ import type {
   WorkbenchTabView
 } from '../../../../shared/workbench-window/workbench-window-types'
 import { sendWorkbenchCommand } from './workbench-window-commands'
+import { WorkbenchImageSource } from './WorkbenchImageSource'
 
 type EditorBodyState =
   | { status: 'loading' }
@@ -91,13 +92,15 @@ export function WorkbenchEditorBody({ tab }: { tab: WorkbenchTabView }): React.J
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col bg-editor-surface">
-          <MarkdownPreview
-            content={state.content.content}
-            filePath={editor.filePath}
-            sourceWorktreeId={tab.worktreeId}
-            sourceRuntimeEnvironmentId={editor.runtimeEnvironmentId}
-            scrollCacheKey={`workbench:${tab.tabId}`}
-          />
+          <WorkbenchImageSource key={`${tab.tabId}:${reloadToken}`} tabId={tab.tabId}>
+            <MarkdownPreview
+              content={state.content.content}
+              filePath={editor.filePath}
+              sourceWorktreeId={tab.worktreeId}
+              sourceRuntimeEnvironmentId={editor.runtimeEnvironmentId}
+              scrollCacheKey={`workbench:${tab.tabId}`}
+            />
+          </WorkbenchImageSource>
         </div>
       )}
     </div>

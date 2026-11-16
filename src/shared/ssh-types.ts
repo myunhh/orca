@@ -5,10 +5,13 @@ import type { NodeDistMirrorAttempt } from './node-dist-mirror'
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
 export const LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
+export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 0
+export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
 
 /** pinned-node uses uploaded Node/prebuilt addons (D6 ladder/D5 design); opt-in legacy uses host Node/npm native deps. */
 export const SSH_REMOTE_RUNTIMES = ['legacy', 'pinned-node'] as const
 export type SshRemoteRuntime = (typeof SSH_REMOTE_RUNTIMES)[number]
+export const DEFAULT_SSH_REMOTE_RUNTIME: SshRemoteRuntime = 'pinned-node'
 
 /** Where the design D6 fallback ladder landed; `legacy` is the opt-in host-npm path outside it. */
 export const SSH_REMOTE_RUNTIME_RUNGS = ['A', 'B', 'C', 'D', 'legacy'] as const
@@ -411,13 +414,9 @@ export type SshPtyConsumerRecovery = {
   }
 }
 
-export type PortForwardEntry = {
+export type PortForwardEntry = SavedPortForward & {
   id: string
   connectionId: string
-  localPort: number
-  remoteHost: string
-  remotePort: number
-  label?: string
   /** Remote terminal-advertised origin; renderer rewrites the forwarded port and relies on the user’s custom-host DNS. */
   advertisedUrl?: string
   /** Use advertised HTTPS even when its hostname cannot be reused locally. */

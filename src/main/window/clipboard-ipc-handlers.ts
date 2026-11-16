@@ -1,11 +1,7 @@
 import { app, clipboard, ipcMain, nativeImage } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { open, stat } from 'node:fs/promises'
-import { runProcess } from '@orca/process-host'
+import { open } from 'node:fs/promises'
 import type { Store } from '../persistence/loading-store/store'
-import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem/access/filesystem-auth'
-import { resolveDesktopAuthorizedPath } from '../ipc/filesystem/access/local-file-access-resolution'
-import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import {
   assertTrustedClipboardSender,
   assertTrustedClipboardTextSender
@@ -26,12 +22,7 @@ import {
   assertClipboardImageDimensionsWithinLimit,
   type ClipboardImageThumbnail
 } from '../../shared/clipboard-image'
-import {
-  writeFileToClipboard,
-  type ClipboardFileDeps,
-  type ClipboardFileResult
-} from './clipboard-file-copy'
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import { registerClipboardFileHandler } from './clipboard-file-ipc'
 import {
   cleanupExpiredRemoteClipboardFiles,
   scheduleLegacyRemoteClipboardFileCleanup
@@ -45,22 +36,13 @@ import { readClipboardPlainText } from './clipboard-plain-text-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
 import { encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
-import {
-  ClipboardPublisherBusyError,
-  publishClipboardOperation,
-  publishClipboardText
-} from './clipboard-text-publisher'
+import { publishClipboardOperation, publishClipboardText } from './clipboard-text-publisher'
 import { restoreNativeChatPastes } from './native-chat-paste-files'
 import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
 import { agentSessionPastedImageName } from '../../shared/agent-session/agent-session-attachments'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 export { setTrustedClipboardRendererWebContentsId } from './clipboard-ipc-sender-trust'
-
-type ClipboardWriteFileRequest = {
-  filePath: string
-  connectionId?: string
-}
 
 export type ClipboardHandlerOptions = {
   /** This machine's chat attachment store, after starting its chat host; null when it can't. */
@@ -190,46 +172,7 @@ export function registerClipboardHandlers(
     assertTrustedClipboardSender(event)
     return savePastedTextAsFile(args, handlerOptions.localChatAttachmentStore)
   })
-  // Publish OS file references for Finder/Explorer paste.
-  ipcMain.handle(
-    'clipboard:writeFile',
-    (event, args: unknown): ClipboardFileResult | Promise<ClipboardFileResult> => {
-      assertTrustedClipboardSender(event)
-      const request = normalizeClipboardWriteFileRequest(args)
-      if (!request) {
-        return { ok: false, reason: 'invalid-path' }
-      }
-      if (request.connectionId) {
-        throw new SshHostNotServedError(request.connectionId)
-      }
-      const resolveFilePath: ClipboardFileDeps['resolveFilePath'] = async (path) => {
-        try {
-          const authorizedPath = await resolveDesktopAuthorizedPath(path, store)
-          await stat(authorizedPath)
-          return { ok: true, path: authorizedPath }
-        } catch (error) {
-          if (error instanceof Error && error.message === PATH_ACCESS_DENIED_MESSAGE) {
-            return { ok: false, reason: 'access-denied' }
-          }
-          return { ok: false, reason: isENOENT(error) ? 'not-found' : 'invalid-path' }
-        }
-      }
-      return publishClipboardOperation(request.filePath.length * 2, () =>
-        writeFileToClipboard(request.filePath, {
-          platform: process.platform,
-          desktop: process.env.XDG_CURRENT_DESKTOP,
-          resolveFilePath,
-          writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
-          runProcess
-        })
-      ).catch((error: unknown) => {
-        if (error instanceof ClipboardPublisherBusyError) {
-          return { ok: false, reason: 'clipboard-busy' }
-        }
-        throw error
-      })
-    }
-  )
+  registerClipboardFileHandler(store)
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
     try {
@@ -274,22 +217,4 @@ export function registerClipboardHandlers(
       clipboard.writeImage(image)
     })
   })
-}
-
-function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRequest | null {
-  if (typeof args === 'string') {
-    return { filePath: args }
-  }
-  if (!args || typeof args !== 'object' || Array.isArray(args)) {
-    return null
-  }
-  const filePath = (args as { filePath?: unknown }).filePath
-  if (typeof filePath !== 'string') {
-    return null
-  }
-  const connectionId = (args as { connectionId?: unknown }).connectionId
-  if (typeof connectionId === 'string' && connectionId.trim() !== '') {
-    return { filePath, connectionId }
-  }
-  return { filePath }
 }

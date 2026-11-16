@@ -36,8 +36,8 @@ export async function removeRuntimeUnregisteredWorktree(args: {
   removedPushTarget: GitPushTarget | undefined
   force: boolean
   allowUnverifiedPtyStop: boolean
-  /** One resolved host for the whole removal. */
-  route: WorktreeRemovalRoute
+  /** This executor can only touch the client's filesystem after SSH dispatch has branched away. */
+  route: Extract<WorktreeRemovalRoute, { kind: 'local' }>
   localOptions: LocalProjectWorktreeGitOptions
   store: RuntimeStore
   acquireWatcherRemoval: (path: string) => Promise<RemovalGate>

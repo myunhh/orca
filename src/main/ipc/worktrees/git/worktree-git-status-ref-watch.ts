@@ -32,6 +32,7 @@ export type GitStatusRefBindingRequest = {
   worktreePath: string
   executionHostId: string
   connectionId?: string
+  providerGeneration?: number
   branch?: string
   upstreamName?: string
 }
@@ -108,6 +109,7 @@ function resolutionKey(args: GitStatusRefBindingRequest): string {
   return [
     args.executionHostId,
     args.connectionId ?? '',
+    args.providerGeneration ?? '',
     args.worktreeId,
     args.worktreePath,
     args.branch,

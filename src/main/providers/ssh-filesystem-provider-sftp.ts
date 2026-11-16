@@ -1,4 +1,5 @@
-import type { SFTPWrapper } from 'ssh2'
+import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2'
+import type { FileStat } from './filesystem-provider-contract'
 
 const ABORTED_SFTP_OPERATION_GRACE_MS = 5_000
 
@@ -63,4 +64,46 @@ export function fastGetViaSftp(
     (callback) => sftp.fastGet(sourcePath, destinationPath, callback),
     options
   )
+}
+
+export function fileStatFromSftpStats(stats: Stats): FileStat {
+  const type = stats.isDirectory() ? 'directory' : stats.isSymbolicLink() ? 'symlink' : 'file'
+  const nlink = 'nlink' in stats && typeof stats.nlink === 'number' ? stats.nlink : undefined
+  return {
+    size: stats.size,
+    type,
+    mtime: stats.mtime * 1000,
+    ...(nlink === undefined ? {} : { nlink })
+  }
+}
+
+export function lstatViaSftp(sftp: SFTPWrapper, filePath: string): Promise<FileStat> {
+  const { promise, resolve, reject } = Promise.withResolvers<FileStat>()
+  sftp.lstat(filePath, (error, stats) => {
+    if (error) {
+      reject(error)
+    } else {
+      resolve(fileStatFromSftpStats(stats))
+    }
+  })
+  return promise
+}
+
+export function readDirViaSftp(
+  sftp: SFTPWrapper,
+  dirPath: string,
+  options?: { signal?: AbortSignal }
+): Promise<FileEntryWithStats[]> {
+  return waitForSftpCallback<FileEntryWithStats[]>(
+    (callback) => sftp.readdir(dirPath, callback),
+    options
+  )
+}
+
+export function statViaSftp(
+  sftp: SFTPWrapper,
+  filePath: string,
+  options?: { signal?: AbortSignal }
+): Promise<Stats> {
+  return waitForSftpCallback<Stats>((callback) => sftp.stat(filePath, callback), options)
 }

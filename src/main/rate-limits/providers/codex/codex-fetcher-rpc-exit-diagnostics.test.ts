@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RunProcess from '@orca/process-host'
 import { isCodexAuthError } from '../../../../shared/codex-auth-errors'
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
 const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => ({
   stubScript: { path: '' },
@@ -63,7 +64,7 @@ process.stdin.on('data', () => {
 let tempRoot: string
 let stubPath: string
 
-function runStub(stderr: string, exitCode: number): Promise<{ error: string | null }> {
+function runStub(stderr: string, exitCode: number): Promise<ProviderRateLimits> {
   process.env.ORCA_STUB_CODEX_STDERR = stderr
   process.env.ORCA_STUB_CODEX_EXIT_CODE = String(exitCode)
   // Empty fixture auth keeps HTTP fallback away from the developer's real login.
@@ -93,6 +94,21 @@ describe('Codex RPC exit diagnostics', () => {
     )
 
     expect(isCodexAuthError(result.error)).toBe(true)
+  })
+
+  it('keeps a transient refresh network failure distinct from an expired login', async () => {
+    const result = await runStub(
+      'Your access token could not be refreshed: error sending request for url (https://auth.openai.com/oauth/token)\n',
+      1
+    )
+
+    expect(result.usageMetadata?.failureKind).toBe('network')
+  })
+
+  it('requires human sign-in after the provider rejects an expired refresh token', async () => {
+    const result = await runStub('Your refresh token has expired. Please sign in again.\n', 1)
+
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
   })
 
   it('redacts paths and secrets a dying child prints, and bounds the line', async () => {

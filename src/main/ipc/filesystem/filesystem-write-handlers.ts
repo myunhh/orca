@@ -2,7 +2,7 @@ import { ipcMain, shell } from 'electron'
 import { lstat, rm, writeFile } from 'node:fs/promises'
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/connection/authority/ssh-connection-generation'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
+import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { tryDeleteWslUncPath } from '../../wsl/filesystem/wsl-unc-delete'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import {
@@ -22,6 +22,7 @@ import { replaceLocalFileBytesIfUnchanged } from './local-disk-bytes-replace'
 import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { TRASH_DELETE_FAILED_MESSAGE } from '../../../shared/trash-delete-failure'
+import { replaceSshFileBytesIfUnchanged } from './ssh-file-bytes-write'
 
 export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -44,8 +45,16 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        const provider = requireSshFilesystemProvider(args.connectionId)
+        if (!provider.writeFileWithDiskPrecondition) {
+          throw new Error('Safe file writes require a newer SSH relay')
+        }
+        return provider.writeFileWithDiskPrecondition(
+          args.filePath,
+          args.content,
+          args.diskPrecondition
+        )
       }
       const filePath = await resolveLocalWriteRequestPath(args.filePath, args.access, store)
       try {
@@ -80,11 +89,16 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
-      }
       if (!(args.bytes instanceof Uint8Array)) {
         throw new Error('Missing file content')
+      }
+      if (args.connectionId != null) {
+        return replaceSshFileBytesIfUnchanged(
+          requireSshFilesystemProvider(args.connectionId),
+          args.filePath,
+          args.bytes,
+          args.diskPrecondition ?? {}
+        )
       }
       const filePath = await resolveLocalWriteRequestPath(args.filePath, args.access, store)
       return replaceLocalFileBytesIfUnchanged(
@@ -112,8 +126,11 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        return requireSshFilesystemProvider(args.connectionId).deletePath(
+          args.targetPath,
+          args.recursive
+        )
       }
       // Delete the symlink entry, not a realpath target that may be outside allowed roots.
       const targetPath = await resolveDesktopAuthorizedPath(args.targetPath, store, {

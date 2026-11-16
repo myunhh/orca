@@ -3,6 +3,8 @@ import type { Store } from '../../persistence/loading-store/store'
 import { isLinkedIssueNumber } from '../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 
 export type LinkedIssueLookupArgs = {
   worktreeId?: string
@@ -45,7 +47,7 @@ export function resolveSourceControlAiLinkedIssueMeta(
   if (typeof args.worktreeId !== 'string' || !args.worktreeId) {
     return null
   }
-  if (typeof store.getWorktreeMeta !== 'function') {
+  if (typeof store.getWorktreeMetaForHost !== 'function') {
     return null
   }
   const parsed = splitWorktreeIdForFilesystem(args.worktreeId)
@@ -59,7 +61,13 @@ export function resolveSourceControlAiLinkedIssueMeta(
   if (!matchesRequestPath(parsed.worktreePath, args, resolvedWorktreePath)) {
     return null
   }
-  return store.getWorktreeMeta(args.worktreeId) ?? null
+  return (
+    readWorktreeMetaForHost(
+      store,
+      args.worktreeId,
+      getConnectionExecutionHostId(args.connectionId)
+    ) ?? null
+  )
 }
 
 export function resolveSourceControlAiLinkedIssue(

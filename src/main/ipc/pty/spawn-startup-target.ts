@@ -55,6 +55,7 @@ export type PtySpawnStartupTarget = {
 }
 
 type PtySpawnStartupArgs = {
+  connectionId?: string | null
   worktreeId: string | undefined
   cwd: string | undefined
   /** Its worktree can imply the WSL distro. */
@@ -81,6 +82,19 @@ type PtySpawnStartupArgs = {
 export async function resolvePtySpawnStartupTarget(
   args: PtySpawnStartupArgs
 ): Promise<PtySpawnStartupTarget> {
+  if (args.connectionId) {
+    const cwd = args.resolveStartupCwd(args.worktreeId, args.cwd)
+    return {
+      cwd,
+      requestedCwd: cwd,
+      terminalRuntimeOptions: {
+        shellOverride: args.shellOverride,
+        terminalWindowsWslDistro: null
+      },
+      expectedWslDistro: null,
+      codexSelectionTarget: { runtime: 'host' }
+    }
+  }
   const source = args.projectRuntimeSource
   // A live pane and a quoted launch already own their runtime; only a fresh plain start derives it.
   const workspace =

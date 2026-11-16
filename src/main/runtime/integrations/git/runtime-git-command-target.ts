@@ -16,6 +16,8 @@ import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-er
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/commit-message-agent-environment'
 import type { PullRequestLinkedIssueMeta } from '../../../source-control/pull-request-linked-issue'
 import { normalizeRuntimeRelativePath } from '../../files/paths/runtime-relative-paths'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
+import type { IGitProvider } from '../../../providers/git-provider-contract'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 
@@ -53,7 +55,7 @@ export type RuntimeGitCommandHost = {
 /** Dispatch only hosts this process serves. runtime:<env> targets belong to that server's nested SSH namespace; local lookup could dial a same-named wrong host. */
 export type RuntimeGitRoute =
   | { kind: 'local'; createProvider: typeof createLocalGitProvider }
-  /** An SSH target this process does not serve; it fails or reports unavailable, never runs here. */
+  /** SSH routes require their relay provider and never run locally. */
   | { kind: 'ssh'; connectionId: string }
 
 export function runtimeGitRouteForTarget(target: RuntimeGitTarget): RuntimeGitRoute {
@@ -79,9 +81,15 @@ export function requireLocalRuntimeGitRoute(
   return route
 }
 
-/** A provider for the target's own host; an `ssh:` host and a `runtime:` host both throw. */
-export function requireRuntimeGitProvider(target: RuntimeGitTarget): LocalGitProvider {
-  return requireLocalRuntimeGitRoute(target).createProvider({
+/** Runtime hosts belong to their own server; direct SSH resolves its registered relay provider. */
+export function requireRuntimeGitProvider(
+  target: RuntimeGitTarget
+): LocalGitProvider | IGitProvider {
+  const route = runtimeGitRouteForTarget(target)
+  if (route.kind === 'ssh') {
+    return requireSshGitProvider(route.connectionId)
+  }
+  return route.createProvider({
     ...localGitOptionsForTarget(target),
     getSharedLinkPaths: () => (target.repo ? getWorktreeSharedLinkPaths(target.repo) : [])
   })

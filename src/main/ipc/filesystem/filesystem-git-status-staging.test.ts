@@ -1,5 +1,6 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
+import type * as SshGitDispatchModule from '../../providers/ssh-git-dispatch'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   handlers,
@@ -12,6 +13,20 @@ import {
   openMock,
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
+import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
+
+const remoteGit = vi.hoisted(() => ({
+  getStatus: vi.fn(),
+  bulkStageFiles: vi.fn()
+}))
+vi.mock('../../providers/ssh-git-dispatch', async (importOriginal) => {
+  const actual = await importOriginal<typeof SshGitDispatchModule>()
+  return {
+    ...actual,
+    requireSshGitProvider: (connectionId: string) =>
+      connectionId === 'connected-ssh' ? remoteGit : actual.requireSshGitProvider(connectionId)
+  }
+})
 
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const { listWorktreesMock } = await import('./filesystem-test-harness')
@@ -114,7 +129,7 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
+import { SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE } from '../../providers/ssh-git-dispatch'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 
 describe('registerFilesystemHandlers', () => {
@@ -122,6 +137,8 @@ describe('registerFilesystemHandlers', () => {
     resetFilesystemIpcMocks()
     // Drop cached roots between fixtures.
     invalidateAuthorizedRootsCache()
+    remoteGit.getStatus.mockReset()
+    remoteGit.bulkStageFiles.mockReset()
   })
 
   it('rejects git file paths that escape the selected worktree', async () => {
@@ -137,7 +154,45 @@ describe('registerFilesystemHandlers', () => {
     expect(discardChangesMock).not.toHaveBeenCalled()
   })
 
-  it('rejects direct SSH status and reads before any local access', async () => {
+  it('reads status and stages scoped changes on the selected SSH host without local disk access', async () => {
+    registerFilesystemHandlers(store as never)
+    const remoteStatus: GitStatusResult = {
+      branch: 'remote-feature',
+      entries: [{ path: 'remote.ts', area: 'unstaged', status: 'modified' }],
+      conflictOperation: 'unknown'
+    }
+    remoteGit.getStatus.mockResolvedValue(remoteStatus)
+    await expect(
+      handlers.get('git:status')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'connected-ssh',
+        includeIgnored: true,
+        includeLineStats: false,
+        branchLineTotalMergeBase: 'a'.repeat(40)
+      })
+    ).resolves.toEqual(remoteStatus)
+    expect(remoteGit.getStatus).toHaveBeenCalledWith(
+      '/remote/repo',
+      expect.objectContaining({
+        includeIgnored: true,
+        includeLineStats: false,
+        branchLineTotalMergeBase: 'a'.repeat(40)
+      })
+    )
+    await handlers.get('git:bulkStage')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'connected-ssh',
+      filePaths: ['remote.ts'],
+      scope: 'all'
+    })
+    expect(remoteGit.bulkStageFiles).toHaveBeenCalledWith('/remote/repo', ['remote.ts'], 'all')
+    expect(getStatusMock).not.toHaveBeenCalled()
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects unavailable direct SSH status and reads before any local access', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing fixture supplies the store API exercised by these handlers.
     registerFilesystemHandlers(store as never)
     await expect(
@@ -145,13 +200,13 @@ describe('registerFilesystemHandlers', () => {
         worktreePath: WORKTREE_FEATURE_PATH,
         connectionId: 'ssh-unserved'
       })
-    ).rejects.toThrow(SshHostNotServedError)
+    ).rejects.toThrow(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
     await expect(
       handlers.get('fs:readFile')!(null, {
         filePath: `${WORKTREE_FEATURE_PATH}/a.ts`,
         connectionId: 'ssh-unserved'
       })
-    ).rejects.toThrow(SshHostNotServedError)
+    ).rejects.toThrow(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
     expect(getStatusMock).not.toHaveBeenCalled()
     expect(readFileMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()

@@ -11,7 +11,7 @@ import { readdir, stat } from 'node:fs/promises'
 import type { DirEntry } from '../../../shared/file-listing/directory-entry'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
 import { sortDirEntries } from '../../../shared/file-listing/file-name-sort'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
+import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import {
@@ -39,6 +39,7 @@ import {
   readLocalLogSnapshot,
   type LocalFileContent
 } from './filesystem-file-content-inspection'
+import { listFilesystemMarkdownDocuments } from '../../providers/filesystem-markdown-listing'
 
 export function registerFilesystemReadHandlers(context: FilesystemHandlerContext): void {
   registerFilesystemChunkReadHandler(context)
@@ -60,9 +61,14 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       // Record throw site and redacted path shape because fs:readDir IPC errors otherwise lack context.
       let throwSite: ReadDirThrowSite = 'authorize'
       try {
-        if (args.connectionId) {
+        if (args.connectionId != null) {
           throwSite = 'ssh-provider'
-          throw new SshHostNotServedError(args.connectionId)
+          return sortDirEntries(
+            await requireSshFilesystemProvider(args.connectionId).readDir(args.dirPath, {
+              followSymlinks:
+                args.followSymlinks ?? store.getSettings().followSymlinkedDirectories ?? false
+            })
+          )
         }
         return await guardWslUncPathAccess(
           args.dirPath,
@@ -110,8 +116,15 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         rangePreview?: boolean
       }
     ): Promise<LocalFileContent> => {
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        const provider = requireSshFilesystemProvider(args.connectionId)
+        const media = await readLocalFilePreview(event, args, store, {
+          documents: args.rangePreview === true
+        })
+        if (media) {
+          return media
+        }
+        return provider.readFile(args.filePath)
       }
       return guardWslUncPathAccess(
         args.filePath,
@@ -152,8 +165,11 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       _event,
       args: { rootPath: string; connectionId?: string }
     ): Promise<MarkdownDocument[]> => {
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        return listFilesystemMarkdownDocuments(
+          requireSshFilesystemProvider(args.connectionId),
+          args.rootPath
+        )
       }
       await assertWslUncPathRunning(args.rootPath)
       const isFolderRoot = store
@@ -186,8 +202,13 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         wakeWslDistro?: boolean
       }
     ): Promise<{ size: number; isDirectory: boolean; mtime: number }> => {
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        const info = await requireSshFilesystemProvider(args.connectionId).stat(args.filePath)
+        return {
+          size: info.size,
+          isDirectory: info.type === 'directory',
+          mtime: info.mtimeMs ?? info.mtime
+        }
       }
       return guardWslUncPathAccess(
         args.filePath,
@@ -218,8 +239,26 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       args: { filePaths: string[]; connectionId?: string }
     ): Promise<PathExistenceResult[]> => {
       validatePathExistenceBatch(args.filePaths)
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      if (args.connectionId != null) {
+        const provider = requireSshFilesystemProvider(args.connectionId)
+        if (provider.pathsExist) {
+          return provider.pathsExist(args.filePaths)
+        }
+        return Promise.all(
+          args.filePaths.map((path) =>
+            capturePathExistence(async () => {
+              try {
+                await provider.stat(path)
+                return true
+              } catch (error) {
+                if (isPathAbsentError(error)) {
+                  return false
+                }
+                throw error
+              }
+            })
+          )
+        )
       }
       return Promise.all(
         args.filePaths.map((filePath) =>
@@ -248,8 +287,9 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       args: { filePath: string; connectionId?: string; access?: LocalFileAccess }
     ): Promise<boolean> => {
       try {
-        if (args.connectionId) {
-          throw new SshHostNotServedError(args.connectionId)
+        if (args.connectionId != null) {
+          await requireSshFilesystemProvider(args.connectionId).stat(args.filePath)
+          return true
         }
         await guardWslUncPathAccess(args.filePath, async () =>
           stat(windowsFsPath(await resolveLocalFileRequestPath(args.filePath, args.access, store)))

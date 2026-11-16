@@ -21,8 +21,8 @@ import {
   setAntigravityNativeCredentialChangeListener
 } from '../../antigravity/native-account-host'
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
-import { normalizeCodexRuntimeSelection } from '../../codex-accounts/runtime-selection'
-import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
+import { getSelectedCodexAccountIdForTarget } from '../../codex-accounts/runtime-selection'
+import { getSelectedClaudeAccountIdForTarget } from '../../claude-accounts/selection/runtime-selection'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
@@ -153,16 +153,11 @@ export function createProviderAccountServices(
       (await getAntigravityAccountService(target)).finishUsageRead(login, limits)
   })
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
-  rateLimits.setInactiveClaudeAccountsResolver(() => {
+  rateLimits.setInactiveClaudeAccountsResolver((target) => {
     const settings = store.getSettings()
-    const activeIds = new Set(
-      [
-        normalizeClaudeRuntimeSelection(settings).host,
-        ...Object.values(normalizeClaudeRuntimeSelection(settings).wsl)
-      ].filter(Boolean)
-    )
+    const activeId = getSelectedClaudeAccountIdForTarget(settings, target)
     return settings.claudeManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
+      .filter((account) => account.id !== activeId)
       .map((account) => ({
         id: account.id,
         managedAuthRuntime: account.managedAuthRuntime,
@@ -170,16 +165,11 @@ export function createProviderAccountServices(
         wslLinuxAuthPath: account.wslLinuxAuthPath
       }))
   })
-  rateLimits.setInactiveCodexAccountsResolver(() => {
+  rateLimits.setInactiveCodexAccountsResolver((target) => {
     const settings = store.getSettings()
-    const activeIds = new Set(
-      [
-        normalizeCodexRuntimeSelection(settings).host,
-        ...Object.values(normalizeCodexRuntimeSelection(settings).wsl)
-      ].filter(Boolean)
-    )
+    const activeId = getSelectedCodexAccountIdForTarget(settings, target)
     return settings.codexManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
+      .filter((account) => account.id !== activeId)
       .map((account) => ({
         id: account.id,
         resolveHome: () =>

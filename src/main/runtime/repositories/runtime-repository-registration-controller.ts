@@ -33,6 +33,7 @@ import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-
 import { getResolvedFolderWorkspacePathStatus } from '../../project-groups/folder-workspace-path-status'
 import { runAsWslUserAct, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { repoCreateFailure, type RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
+import { addRemoteRepoFromPath } from '../../ipc/repos/remote-repo-registration'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -51,6 +52,17 @@ export class RuntimeRepositoryRegistrationController {
     displayName?: string
   ): Promise<Repo> {
     const store = this.requireStore()
+    const host = parseExecutionHostId(executionHostId)
+    if (host?.kind === 'ssh') {
+      const result = await addRemoteRepoFromPath(store, {
+        connectionId: host.targetId,
+        remotePath: path,
+        kind,
+        displayName
+      })
+      this.invalidate(result.repo.id)
+      return result.repo
+    }
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
     }

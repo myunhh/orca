@@ -45,8 +45,13 @@ import type {
   Worktree,
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
+import type {
+  HostLineageSnapshot,
+  ListDesktopLineageForHostArgs
+} from '../../shared/host-lineage-contract'
 
 export type WorktreeApi = {
+  listLineageForHost: (args: ListDesktopLineageForHostArgs) => Promise<HostLineageSnapshot>
   /** Retired names prevent path reuse; fully spent tiers are compacted into a watermark. */
   listRetiredNames: (args: { repoId: string }) => Promise<RetiredNameRegistry>
   listDetected: {

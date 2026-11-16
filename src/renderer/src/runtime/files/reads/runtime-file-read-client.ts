@@ -40,6 +40,7 @@ export async function readRuntimeFileContent(
   return {
     content: markup,
     isBinary: false,
+    mimeType: result.mimeType,
     ...(result.fileIdentity ? { fileIdentity: result.fileIdentity } : {})
   }
 }

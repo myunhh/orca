@@ -15,6 +15,13 @@ import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
 } from '../../../../shared/runtime-navigation'
+import { resolveWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
+import { ExecutionHostNotDispatchableError } from '../../../providers/execution-host-provider-dispatch'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
+import { resolveSshWorktreeCreateBase } from '../creation/runtime-ssh-worktree-create-base'
+import { registerSshWorktreeCreateRoots } from '../creation/runtime-ssh-worktree-roots'
+import { createWorktreeCreateTimingRecorder } from '../../../workspaces/creation/worktree-create-timing'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 
 export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
@@ -172,6 +179,23 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
     const store = this.requireStore()
+    if (isFolderRepo(repo)) {
+      return
+    }
+    const route = resolveWorktreeCreateRoute(repo)
+    if (route.kind === 'runtime') {
+      throw new ExecutionHostNotDispatchableError(route.hostId)
+    }
+    if (route.kind === 'ssh') {
+      await registerSshWorktreeCreateRoots(route.connectionId, [repo.path])
+      await resolveSshWorktreeCreateBase({
+        provider: requireSshGitProvider(route.connectionId),
+        repo,
+        requestedBaseBranch: args.baseBranch,
+        timing: createWorktreeCreateTimingRecorder()
+      })
+      return
+    }
     await prefetchWorktreeCreateBase({
       repo,
       baseBranch: args.baseBranch,

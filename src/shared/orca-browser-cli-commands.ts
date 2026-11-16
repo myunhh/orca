@@ -5,6 +5,7 @@ import { orcaCliInvocations } from './orca-cli-invocations'
 export const ORCA_BROWSER_CLI_COMMAND_KEYS = {
   'browser-extension': ['extension list', 'extension reload'],
   'browser-identity': ['browser identity get', 'browser identity set'],
+  'chatgpt-research': ['research prepare', 'research fill', 'research submit', 'research read'],
   'browser-nav': [
     'snapshot',
     'screenshot',

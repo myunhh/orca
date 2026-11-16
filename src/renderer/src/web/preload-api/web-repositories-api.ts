@@ -14,6 +14,12 @@ import { noopUnsubscribe } from './web-storage'
 
 export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
+    // Direct SSH authority belongs to the desktop, never to a paired runtime's catalog.
+    listForExecutionHost: async ({ executionHostId }) => ({
+      authoritative: false,
+      executionHostId,
+      reason: 'rejected'
+    }),
     list: async () => {
       const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
       return owned.result.repos.map((repo) => withRuntimeRepoOwner(repo, owned.hostId))

@@ -15,5 +15,5 @@ export function registerCompanionWindowHandlers(
   registerDashboardPopoutHandlers(store, keybindings)
   registerWorkspaceSpaceWindowHandlers(store)
   registerTerminalPreviewHandlers(runtime)
-  registerWorkbenchWindowHandlers(store, keybindings)
+  registerWorkbenchWindowHandlers(store, runtime, keybindings)
 }

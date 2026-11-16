@@ -1,9 +1,7 @@
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { buildByIdIndex } from '../../../../shared/first-row-by-id-index'
-import { buildWorktreeByIdIndex } from './workspace-terminal-worktree-index'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { selectWorktreesByRepo } from '../workspaces/catalog/workspace-record-fields'
+import { getRemoteConnectionIdForWorktree } from './terminal-workspace-routing'
 import { markFullResync, recordDraft, tabBucketDraft } from '../keyed-record-transitions'
 
 export function createWorkspaceTerminalReconnectActions(
@@ -37,9 +35,6 @@ export function createWorkspaceTerminalReconnectActions(
       // Why: defer daemon attachment for real dimensions; eager 80×24 flushes garble output.
       const reconnectedTabsByWorktree = tabBucketDraft(tabsByWorktree)
       const reconnectedPtyIdsByTabId = recordDraft(ptyIdsByTabId)
-      // No writes/awaits in the loop, so one store-snapshot index serves every iteration.
-      const worktreeById = buildWorktreeByIdIndex(selectWorktreesByRepo(get()))
-      const repoById = buildByIdIndex(get().repos)
       for (const worktreeId of ids) {
         const tabs = tabsByWorktree[worktreeId] ?? []
         const targetTabIds = pendingReconnectTabByWorktree[worktreeId] ?? []
@@ -84,11 +79,7 @@ export function createWorkspaceTerminalReconnectActions(
       // Why: keep deferred SSH session IDs for post-cleanup reconnect.
       const deferredSshSessionIdsByTabId: Record<string, string> = {}
       for (const worktreeId of ids) {
-        const worktree = worktreeById.get(worktreeId)
-        // Cold-start SSH listings are absent; derive repo ID from the composite worktree ID to retain deferred sessions.
-        const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-        const repo = repoId ? (repoById.get(repoId) ?? null) : null
-        const connectionId = repo?.connectionId
+        const connectionId = getRemoteConnectionIdForWorktree(get(), worktreeId)
         if (!connectionId) {
           continue
         }

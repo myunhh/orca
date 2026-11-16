@@ -11,6 +11,8 @@ import type {
   WorkbenchTerminalPane
 } from '../../../../../shared/workbench-window/workbench-window-types'
 import {
+  WORKBENCH_MAX_BROWSER_URL_CHARS,
+  WORKBENCH_MAX_DISPLAY_TEXT_CHARS,
   WORKBENCH_MAX_PANES_PER_TAB,
   WORKBENCH_MAX_TABS
 } from '../../../../../shared/workbench-window/workbench-window-types'
@@ -134,6 +136,39 @@ function buildTabView(state: AppState, unifiedTabId: string): WorkbenchTabView |
       agentState: workbenchTerminalAgentState(state, terminalTab),
       terminal: buildTerminalPanes(state, terminalTab, worktreePath),
       editor: null
+    }
+  }
+  if (tab.contentType === 'browser') {
+    const browser = state.browserTabsByWorktree[tab.worktreeId]?.find(
+      (candidate) => candidate.id === tab.entityId
+    )
+    if (!browser) {
+      return null
+    }
+    const pages = state.browserPagesByWorkspace[browser.id] ?? []
+    return {
+      ...common,
+      label: resolveUnifiedTabLabel(
+        tab,
+        state.settings?.tabAutoGenerateTitle === true,
+        browser.label ?? browser.title
+      ).slice(0, WORKBENCH_MAX_DISPLAY_TEXT_CHARS),
+      kind: 'browser',
+      agentState: null,
+      terminal: null,
+      editor: null,
+      browser: {
+        workspaceId: browser.id,
+        activePageId: browser.activePageId ?? pages[0]?.id ?? null,
+        pages: pages.map((page) => ({
+          id: page.id,
+          title: page.title.slice(0, WORKBENCH_MAX_DISPLAY_TEXT_CHARS),
+          url: page.url.slice(0, WORKBENCH_MAX_BROWSER_URL_CHARS),
+          loading: page.loading,
+          canGoBack: page.canGoBack,
+          canGoForward: page.canGoForward
+        }))
+      }
     }
   }
   const editor = buildEditorView(state, tab)

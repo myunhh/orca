@@ -1,4 +1,5 @@
 import { resetHiddenRendererPtyDeliveryDebugCounters } from './pty-hidden-delivery-gate'
+import { installSessionSshOutputIntake } from './ssh-intake'
 import {
   setReadPtyRendererDeliveryDebugSnapshot,
   setResetPtyRendererDeliveryDebugSnapshot,
@@ -41,6 +42,8 @@ import {
 import { acceptPtyDataForRenderer, rendererPtyIsKnownHidden } from './accept'
 import {
   consumeSyntheticKillExit,
+  preparePtyExitForRenderer,
+  finalizePtyExitForRenderer,
   rememberRetiredRejectedPty,
   rememberSyntheticKillExit,
   sendPtyExitToRenderer,
@@ -58,7 +61,8 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   session.canSendPtyDataToRenderer = (id, options) => canSendPtyDataToRenderer(session, id, options)
   session.schedulePendingDataFlush = (delayMs) => schedulePendingDataFlush(session, delayMs)
   session.flushPendingData = () => flushPendingData(session)
-  session.sendPtyDataToRenderer = (id, payload) => sendPtyDataToRenderer(session, id, payload)
+  session.sendPtyDataToRenderer = (id, payload, projectionAdmissionIds) =>
+    sendPtyDataToRenderer(session, id, payload, projectionAdmissionIds)
   session.sendModelRestoreNeededMarker = (id, reason, markerSeq) =>
     sendModelRestoreNeededMarker(session, id, reason, markerSeq)
   session.updateProducerFlowControl = (id) => updateProducerFlowControl(session, id)
@@ -72,8 +76,10 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   session.setPendingPtyData = (id, pending) => setPendingPtyData(session, id, pending)
   session.clearDispatcherReadyWatchdog = () => clearDispatcherReadyWatchdog(session)
   session.armDispatcherReadyWatchdog = () => armDispatcherReadyWatchdog(session)
-  session.acceptPtyDataForRenderer = (payload, outputSeq) =>
-    acceptPtyDataForRenderer(session, payload, outputSeq)
+  session.acceptPtyDataForRenderer = (payload, outputSeq, projection) =>
+    acceptPtyDataForRenderer(session, payload, outputSeq, projection)
+  session.preparePtyExitForRenderer = (payload) => preparePtyExitForRenderer(session, payload)
+  session.finalizePtyExitForRenderer = (payload) => finalizePtyExitForRenderer(session, payload)
   session.sendPtyExitToRenderer = (payload) => sendPtyExitToRenderer(session, payload)
   session.sendPtySpawnedToRenderer = (id) => sendPtySpawnedToRenderer(session, id)
   session.requestSerializedBuffer = (ptyId, opts) => requestSerializedBuffer(session, ptyId, opts)
@@ -125,6 +131,10 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
     session.producerFlowControl.releaseAll()
     session.clearDeliveryResyncProbe()
     session.deliveryResyncUnansweredWarnLogged = false
+    for (const id of session.rendererDeliveryAccountingByPty.keys()) {
+      session.sshOutputIntake?.transferPtyProjections(id, 'renderer-lifecycle-reset')
+    }
+    session.sourceCreditPendingPtys.clear()
     session.rendererDeliveryAccountingByPty.clear()
     session.rendererInFlightTotalChars = 0
     session.clearPendingPtyData()
@@ -143,4 +153,5 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   setInvalidatePendingPtyDrainPolicy((id, schedule) =>
     invalidatePendingPtyDrainClassification(session, id, schedule)
   )
+  installSessionSshOutputIntake(session)
 }

@@ -9,6 +9,8 @@ import type {
 
 export type SshLeaseStoreMock = {
   getRepos: () => unknown[]
+  getSshTargets: () => unknown[]
+  syncOrcadMigrationScrollbackRetention: Mock
   getSshRemotePtyLeases: Mock
   markSshRemotePtyLease: Mock
   removeSshRemotePtyLeases: Mock
@@ -43,6 +45,8 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mockStore = {
     getRepos: () => [],
+    getSshTargets: () => mockSshStore.listTargets(),
+    syncOrcadMigrationScrollbackRetention: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
     removeSshRemotePtyLeases: vi.fn(),
@@ -107,6 +111,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockStore.getSshRemotePtyLeases.mockReset().mockReturnValue([])
     mockStore.markSshRemotePtyLease.mockReset()
     mockStore.removeSshRemotePtyLeases.mockReset()
+    mockStore.syncOrcadMigrationScrollbackRetention.mockReset()
 
     mockConnectionManager.connect.mockReset()
     mockConnectionManager.disconnect.mockReset()

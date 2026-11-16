@@ -20,8 +20,7 @@ import {
   type TrackedUpstreamBranch,
   type TrackedUpstreamSnapshotProbeResult
 } from './tracked-upstream-cache'
-import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 export async function getTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,
@@ -158,12 +157,14 @@ export async function probeTrackedUpstreamSnapshot(
   let reviewSources: Map<string, GitReviewBranchSource | Error> | undefined
   if (reviewBranchName && !probeFailed) {
     try {
-      requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
       if (!upstreamsByBranchName.has(reviewBranchName)) {
         upstreamsByBranchName.set(reviewBranchName, null)
       }
       reviewSources = await readGitReviewBranchSources(
-        (args) => gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions }),
+        (args) =>
+          connectionId
+            ? requireSshGitProvider(connectionId).exec(args, repoPath)
+            : gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions }),
         upstreamsByBranchName.keys()
       )
     } catch {
@@ -199,13 +200,14 @@ export async function probeTrackedUpstreamBranches(
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
 }> {
   const args = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
-  requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
   try {
-    const result = await gitExecFileAsync(args, {
-      cwd: repoPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-      ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
-    })
+    const result = connectionId
+      ? await requireSshGitProvider(connectionId).exec(args, repoPath)
+      : await gitExecFileAsync(args, {
+          cwd: repoPath,
+          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+          ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
+        })
     return {
       probeFailed: false,
       upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)

@@ -11,6 +11,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-work
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 type FolderWorkspacePathStatusStore = {
   getRepos: () => Repo[]
@@ -110,8 +111,18 @@ async function statFolderPath(
     return { path, exists: false, reason: 'ambiguous-connection' }
   }
   if (connection.kind === 'ssh') {
-    // Why: this process serves no SSH filesystem.
-    return { path, exists: false, reason: 'unavailable' }
+    const provider = getSshFilesystemProvider(connection.connectionId)
+    if (!provider) {
+      return { path, exists: false, reason: 'unavailable' }
+    }
+    try {
+      const stats = await provider.stat(path)
+      return stats.type === 'directory'
+        ? { path, exists: true }
+        : { path, exists: false, reason: 'not-directory' }
+    } catch (error) {
+      return { path, exists: false, reason: pathStatErrorReason(error) }
+    }
   }
 
   // A stat of a stopped distro's \\wsl.localhost folder boots it (E9): unknown, never missing.

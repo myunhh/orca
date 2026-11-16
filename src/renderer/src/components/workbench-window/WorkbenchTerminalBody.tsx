@@ -77,7 +77,7 @@ function WorkbenchTerminalPaneView({
           ptyId={pane.ptyId}
           terminalInput={pane.terminalInput}
           onRequestSplit={split}
-          className="min-h-0 flex-1"
+          className="h-full min-h-0 flex-1"
         />
       ) : (
         <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">

@@ -53,6 +53,9 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
     if (fresh.status === 'unavailable') {
       return fresh
     }
+    if (fresh.usageMetadata?.failureKind === 'missing-credentials') {
+      return fresh
+    }
 
     if (!previous) {
       return fresh

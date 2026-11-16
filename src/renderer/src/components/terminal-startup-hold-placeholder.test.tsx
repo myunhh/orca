@@ -17,6 +17,7 @@ vi.mock('../store', async () => {
     groupsByWorktree,
     tabsByWorktree,
     unifiedTabsByWorktree,
+    detachedWindowIdByTabId: {},
     consumeSuppressedPtyExit: () => false,
     focusGroup: () => {},
     reconcileWorktreeTabModel: () => ({ renderableTabCount: 1 }),
