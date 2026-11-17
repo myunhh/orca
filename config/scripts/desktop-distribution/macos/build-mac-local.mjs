@@ -33,9 +33,19 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   console.log(`[build:mac] local update version ${identity.version}`)
   execFileSync(
     process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-    ['exec', 'electron-builder', '--config', 'config/electron-builder.config.cjs', '--mac'],
+    [
+      'exec',
+      'electron-builder',
+      '--config',
+      'config/electron-builder.config.cjs',
+      '--mac',
+      ...process.argv.slice(2)
+    ],
     {
       env: {
+        // Without the template the app can't serve any SSH host; fail instead of shipping that.
+        // Get it via fetch-upstream-orcad-template.mjs or `pnpm build:orcad-template`.
+        ORCA_REQUIRE_ORCAD_TEMPLATE: '1',
         ...process.env,
         ORCA_BUILD_COMMIT: identity.commit,
         ORCA_LOCAL_BUILD_VERSION: identity.version

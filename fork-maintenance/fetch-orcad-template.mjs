@@ -1,11 +1,13 @@
 // Puts the SSH host server template into out/orcad-template so this fork's builds can set up SSH hosts.
-// A local build cannot make it: it needs node-pty built on every host OS, which only CI's runners do.
-// Usage: node fork-maintenance/fetch-orcad-template.mjs [--build] [--run <id>] [--repo owner/name]
+// A full build needs node-pty built on every host OS, which only CI's runners do.
+// Usage: node fork-maintenance/fetch-orcad-template.mjs [--local [--tag vX.Y.Z]] [--build] [--run <id>] [--repo owner/name]
+//   --local  no CI: build this fork's server here and take per-OS natives from an upstream release
 //   --build  start a fresh template build on this fork's GitHub Actions first, then download it
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
+import { assembleLocalTemplate } from './orcad-template-local-assembly.mjs'
 
 const WORKFLOW = 'node-server-tests.yml'
 const ARTIFACT = 'orcad-template'
@@ -38,7 +40,38 @@ function gh(args, options = {}) {
 const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim()
 
 const repo =
-  argValue('--repo') ?? gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'])
+  argValue('--repo') ??
+  // Why origin: with an `upstream` remote, a bare `gh repo view` resolves to upstream, not the fork.
+  gh([
+    'repo',
+    'view',
+    git('remote', 'get-url', 'origin'),
+    '--json',
+    'nameWithOwner',
+    '-q',
+    '.nameWithOwner'
+  ])
+
+function verifyOutput() {
+  const require = createRequire(import.meta.url)
+  const { verifyPackagedOrcadTemplate } = require(
+    join(repoRoot, 'config/scripts/orcad-distribution/template/verify-packaged-orcad-template.cjs')
+  )
+  verifyPackagedOrcadTemplate(join(repoRoot, 'out'))
+  if (!existsSync(outputDir)) {
+    throw new Error(`${outputDir} is missing`)
+  }
+}
+
+async function assembleLocally() {
+  const upstreamRepo =
+    argValue('--upstream') ??
+    gh(['repo', 'view', repo, '--json', 'parent', '-q', '.parent | "\\(.owner.login)/\\(.name)"'])
+  const tag =
+    argValue('--tag') ??
+    gh(['release', 'view', '--repo', upstreamRepo, '--json', 'tagName', '-q', '.tagName'])
+  await assembleLocalTemplate({ repoRoot, outputDir, upstreamRepo, tag, say })
+}
 
 function hasLiveTemplateArtifact(runId) {
   const names = gh([
@@ -119,7 +152,14 @@ function buildTemplate() {
   return run.databaseId
 }
 
-function main() {
+async function main() {
+  if (process.argv.includes('--local')) {
+    await assembleLocally()
+    verifyOutput()
+    say(`Ready: ${outputDir}`)
+    say('Restart `pnpm dev`, or rebuild the app, then reconnect the SSH host.')
+    return
+  }
   let runId = argValue('--run')
   if (!runId && process.argv.includes('--build')) {
     runId = String(buildTemplate())
@@ -145,20 +185,13 @@ function main() {
   gh(['run', 'download', runId, '--repo', repo, '--name', ARTIFACT, '--dir', outputDir], {
     stdio: 'inherit'
   })
-  const require = createRequire(import.meta.url)
-  const { verifyPackagedOrcadTemplate } = require(
-    join(repoRoot, 'config/scripts/verify-packaged-orcad-template.cjs')
-  )
-  verifyPackagedOrcadTemplate(join(repoRoot, 'out'))
-  if (!existsSync(outputDir)) {
-    throw new Error(`${outputDir} is missing after download`)
-  }
+  verifyOutput()
   say(`Ready: ${outputDir}`)
   say('Restart `pnpm dev`, or rebuild the app, then reconnect the SSH host.')
 }
 
 try {
-  main()
+  await main()
 } catch (error) {
   console.error(`[orcad-template] ${error instanceof Error ? error.message : String(error)}`)
   process.exit(1)

@@ -36,16 +36,19 @@ See [the codebase dependency analysis](docs/codebase-dependency-analysis.md) for
 
 ## SSH hosts: getting the server template
 
-To work on an SSH host, Orca installs its own server there from a server template bundled with the app. Release builds include it. Builds of this fork made with `pnpm dev` or a local packaging run do not, so connecting to an SSH host shows **"This host isn't supported by this version of Orca"**. Building the template needs node-pty compiled on Linux, macOS and Windows, so it is made on GitHub Actions and downloaded once:
+To work on an SSH host, Orca installs its own server there from a server template bundled with the app. Release builds include it. Builds of this fork made with `pnpm dev` or a local packaging run do not, so connecting to an SSH host shows **"This host isn't supported by this version of Orca"**. `pnpm build:mac` refuses to package without it (`ORCA_REQUIRE_ORCAD_TEMPLATE=0` overrides).
+
+Make the template on the machine you build on (macOS, Windows or Linux), without CI:
 
 ```bash
-node fork-maintenance/fetch-orcad-template.mjs --build
+node fork-maintenance/fetch-orcad-template.mjs --local
 ```
 
-This starts the template build on your fork's Actions (about 30-60 minutes), then puts the result in `out/orcad-template`. It needs the GitHub CLI signed in (`gh auth login`) and Actions enabled on the fork. Afterwards restart `pnpm dev` or rebuild the app, then reconnect the host; Orca retries hosts it gave up on while the template was missing.
+This builds this fork's server code here, so the fork's features reach the SSH host. Only the per-OS native binaries (node-pty, file watcher, ripgrep, Windows helpers) come from an upstream release, because compiling them needs every OS. They carry no fork features, and the script refuses a release whose native loaders differ from this checkout; then pass `--tag vX.Y.Z` with the upstream release closest to your last upstream merge. It needs the GitHub CLI signed in (`gh auth login`) and the usual native build tools. The result goes to `out/orcad-template`. Afterwards restart `pnpm dev` or rebuild the app (`pnpm build:mac --arm64` on Apple Silicon), then reconnect the host; Orca retries hosts it gave up on while the template was missing.
 
-- Without `--build`, the script downloads the newest template your fork's Actions already built. Templates stay downloadable for 7 days.
-- Fetch the template again after syncing upstream, because the server code changes with it.
+When Actions is enabled on the fork, CI can build the whole template instead: `--build` starts it (about 30-60 minutes), and with no flag the script downloads the newest one already built (kept for 7 days).
+
+- Make the template again after syncing upstream, because the server code changes with it.
 
 ## 1. Detached Workbench Windows
 
