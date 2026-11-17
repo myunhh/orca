@@ -612,7 +612,8 @@ module.exports = {
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
-    ...(isMacRelease
+    // Built-in signing passes the identity name (breaks on non-ASCII names); the custom signer gets the hash.
+    ...(isMacRelease || (process.platform === 'darwin' && findInstalledMacSigningIdentity())
       ? { sign: resolve(__dirname, './scripts/desktop-distribution/macos/sign-mac-app.mjs') }
       : {}),
     signIgnore: [
@@ -912,14 +913,15 @@ function findInstalledMacSigningIdentity(keychainFile) {
         encoding: 'utf8'
       }
     )
-    const releaseMatch =
-      output.match(/"([^"]*Developer ID Application:[^"]+)"/) ??
-      output.match(/"([^"]*Apple Distribution:[^"]+)"/)
-    if (releaseMatch?.[1]) {
-      return releaseMatch[1]
+    // Sign by SHA-1: codesign throws "unknown exception" for non-ASCII (e.g. Korean) identity names.
+    const installed = [...output.matchAll(/^\s*\d+\)\s+([0-9A-F]{40})\s+"([^"]+)"/gm)]
+    const findHash = (kind) => installed.find(([, , name]) => name.includes(kind))?.[1]
+    const release = findHash('Developer ID Application:') ?? findHash('Apple Distribution:')
+    if (release) {
+      return release
     }
     if (!isMacRelease) {
-      return output.match(/"([^"]*Apple Development:[^"]+)"/)?.[1] ?? null
+      return findHash('Apple Development:') ?? null
     }
   } catch {}
   return null

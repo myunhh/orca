@@ -84,14 +84,16 @@ function resolveSigningIdentity() {
   if (identities.status !== 0 || !identities.stdout) {
     return '-'
   }
-  const developmentMatch = identities.stdout.match(/"([^"]*Apple Development:[^"]+)"/)
-  if (process.env.ORCA_MAC_RELEASE !== '1' && developmentMatch) {
-    return developmentMatch[1]
+  // Sign by SHA-1: codesign throws "unknown exception" for non-ASCII (e.g. Korean) identity names.
+  const installed = [...identities.stdout.matchAll(/^\s*\d+\)\s+([0-9A-F]{40})\s+"([^"]+)"/gm)]
+  const findHash = (kind) => installed.find(([, , name]) => name.includes(kind))?.[1]
+  const development = findHash('Apple Development:')
+  if (process.env.ORCA_MAC_RELEASE !== '1' && development) {
+    return development
   }
-  const releaseMatch =
-    identities.stdout.match(/"([^"]*Developer ID Application:[^"]+)"/) ??
-    identities.stdout.match(/"([^"]*Apple Distribution:[^"]+)"/)
-  return releaseMatch?.[1] ?? developmentMatch?.[1] ?? '-'
+  return (
+    findHash('Developer ID Application:') ?? findHash('Apple Distribution:') ?? development ?? '-'
+  )
 }
 
 function run(command, args) {
